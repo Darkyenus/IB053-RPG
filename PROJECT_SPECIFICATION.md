@@ -28,25 +28,32 @@ tak z mobilních chat aplikací (Telegram, možná FB Messenger).
 		- Může trvat jakkoli dlouho **(na vstup od hráče se může čekat dlouho, protože je zamýšleno aby se hra hrála
 			i po malých částech kdy má zrovna hráč čas, proto by bylo dobře, kdyby z obrazovky bylo vždy jasné co se
 			s hráčem zrovna děje, i když naposledy hrál před týdnem a už si nepamatuje kam se dostal)**
+        (Počet akcí typu cestování/boj/průzkum/léčení bych omezil něčím jako jsou tahy - systém že se ti třeba každých 30 minut vygeneruje tah a můžeš si uchovat třeba 100 tahů)
 	- Hráč:
 		- Má schopnosti a předměty (inventář a obléknuté), někde se nachází a prožívá nějakou akci
 		- Inventář je neomezený, ale příliš mnoho předmětů v inventáři zpomaluje
 			(-agility stat, pokud předmětů nad nějakou hranici)
 		- Pokud zemře, ztrácí *něco* (zkušenosti? předměty? (dobré by bylo kdyby šly předměty získat zpět,
 		ztráta zkušeností je lepší), možná nějaký čas ("Musíš počkat X minut dokud se nezotavíš ze setkání se smrtí"))
+        (určitě jsem pro ztrátu zkušeností.)
 	- Monstrum:
 		- Nepřítel, má také staty, ale místo předmětů (může mít teoreticky nějaké oblečené pokud se jedná o humanoida),
 			má loot-table, tj. po vítězství se vygeneruje loot
+            (bude se muset upravovat pro level hráče + luck, asi bych byl pro standartní příponový + item level systém generování, s tím, že druh nepřítele ovlivnovnuje spíš typy věcí co z něj padají, v případě rare nepřátel asi nějaký bonus k item levelu)
 		- K boji dochází jen v akci Boj
 	- Staty:
 		- Číselné hodnoty, které určují schopnosti postavy. Vyšší je vždy lepší
-		- **Síla (Strength)**: Primární stat pro útok, zvyšuje poškození po zásahu
+		- **Síla (Strength)**: Primární stat pro útok, zvyšuje poškození po zásahu (+1)
 		- **Obratnost (Dexterity)**: Poměr obratnost útočníka a obránce určuje pravděpodobnost zásahu
+        (hodil by se vzorec kdy je vždycky určitá šance (byť malá), že zasáhne + potom diminishing return toho, že budeš stackovat obratnost)
 		- **Hbitost (Agility)**: Určuje jak často má postava příležitost útočit (používat schopnosti?)
-		- **Štěstí (Luck)**: Zvyšuje možnost náhle znatelně lepšího výsledku - lepší loot, šance na kritický zásah
-			(do toho se započítává i štěstí protivníka), šance na výprodej v obchodě...
+        (takže z toho budou něco jako action pointy per turn, right? )
+		- **Štěstí (Luck)**: Zvyšuje možnost náhle znatelně lepšího výsledku - lepší loot, šance na kritický 
+            (do toho se započítává i štěstí protivníka), šance na výprodej v obchodě...
+            (to vliv tohohle už je teoreticky započítán tím, že má šanci ti taky dát kritický zásah v závistosti na jeho luck + mitigation už je. + asi taky diminishing returns na crit)
+        - **Odolnost (Stamina)** Určuje počet životů (možná přímo závislé na levelu, pro zjednodušení)
 		- Základní hodnota je určená úrovní postavy, respektive tím jak si rozdělí své
-			body schopností získané při zvýšení úrovně
+			body schopností získané při zvýšení úrovně (řekl bych, že 10 pointů na level, přemýšlím kolik budou dostávat nepřátelé, aby jejich level vypovídal o tom jak sjou silní ale aby jsi zase neměl extra velký problém s tí zabít jednoho)
 		- Dále se může jejich hodnota dočasně měnit pomocí předmětů s pasivními bonusy, pomocí dočasných
 			stavových efektů ("Napil jsi se kořalky, 30 tahů budš mít +5 síly ale -5 obratnosti")
 
