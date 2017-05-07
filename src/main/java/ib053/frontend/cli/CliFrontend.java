@@ -56,7 +56,7 @@ public class CliFrontend implements Frontend {
                 } catch (IOException e) {
                     throw new RuntimeException("Console read failure", e);
                 }
-                if (line == null || line.contains("quit")) {
+                if (line == null || line.equalsIgnoreCase("quit") || line.equalsIgnoreCase("q") || line.equalsIgnoreCase("exit")) {
                     break;
                 } else {
                     final int action = parseInt(line, -1);
@@ -69,6 +69,8 @@ public class CliFrontend implements Frontend {
                     });
                 }
             }
+
+            core.shutdown();
         }, "Console Input Thread").start();
     }
 

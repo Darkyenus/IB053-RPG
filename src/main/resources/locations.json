@@ -1,0 +1,25 @@
+[
+  {
+    "id":0,
+    "name":"Newbie Hill",
+    "description":"Small hill with a large tree, with distant vistas of fields, mountains on the horizon and a small village in a nearby vale.",
+    "directions":{
+      "Downhill towards the village":1
+    }
+  }, {
+    "id":1,
+    "name":"Wensleyvale Village",
+    "description":"Small village fortified with an old wooden palisade."
+    "directions":{
+      "Up the Newbie hill":0,
+      "Over the creek into the forest":2
+    }
+  }, {
+    "id":2,
+    "name":"Wensleyvale Forest",
+    "description":"Lush forest, just beyond the Wensleyvale creek. Mostly safe, but still be careful.",
+    "directions":{
+      "Over the creek back to the village":1
+    }
+  }
+]

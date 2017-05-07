@@ -1,0 +1,29 @@
+[
+  {
+    "id":1,
+    "type":"WEAPON",
+    "name":"Dull knife",
+    "lore":"This knife is so dull, it won't cut melted butter",
+    "value":0,
+    "attributes": {
+      "DMG":1
+    }
+  },{
+    "id":2,
+    "type":"WEAPON",
+    "name":"Rusty knife",
+    "value":0,
+    "attributes": {
+      "DMG":1
+    }
+  },{
+    "id":3,
+    "type":"WEAPON",
+    "name":"Rusty knife of agility",
+    "value":2,
+    "attributes": {
+      "DMG":1,
+      "AGI":1
+    }
+  }
+]

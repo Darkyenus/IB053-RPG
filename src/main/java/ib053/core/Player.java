@@ -9,10 +9,13 @@ public final class Player {
     private final long id;
     private final String name;
 
+    /** Do not modify.
+     * @see GameCore#changePlayerActivity(Player, Activity) */
     Activity currentActivity;
 
-    /** Do not modify: {@link GameCore#movePlayer(Player, Place)} */
-    Place location;
+    /** Do not modify.
+     * @see GameCore#movePlayer(Player, Location) */
+    Location location;
 
     public GameCore getCore() {
         return core;
@@ -29,7 +32,7 @@ public final class Player {
     }
 
     /** Location in which the player resides. */
-    public Place getLocation() {
+    public Location getLocation() {
         return location;
     }
 

@@ -2,15 +2,17 @@ package ib053.core.activities;
 
 import ib053.core.*;
 
+import java.util.function.ObjLongConsumer;
+
 /**
  *
  */
-public final class DefaultActivity extends Activity {
+public final class LocationActivity extends Activity {
 
-    private final Place place;
+    private final Location location;
 
-    public DefaultActivity(Place place) {
-        this.place = place;
+    public LocationActivity(Location location) {
+        this.location = location;
     }
 
     @Override
@@ -23,8 +25,8 @@ public final class DefaultActivity extends Activity {
                 player.getCore().notifyPlayerEventHappened(player, new Event("You see absolutely nothing interesting."));
             }
         });
-        place.getDirections().forEach((message, place) -> {
-            core.addActivityAction(this, new TravelAction(message, place));
+        location.directions.forEach((ObjLongConsumer<? super String>) (message, place) -> {
+            core.addActivityAction(this, new TravelAction(message, core.worldLocations.get(place)));
         });
     }
 
@@ -35,8 +37,8 @@ public final class DefaultActivity extends Activity {
 
     @Override
     public String getDescription(Player player) {
-        final Place location = player.getLocation();
-        return "You are in "+location.getName()+": "+location.getFlavorText();
+        final Location location = player.getLocation();
+        return "You are in "+location.name+": "+location.description;
     }
 
     @Override
@@ -47,10 +49,10 @@ public final class DefaultActivity extends Activity {
 
     private final class TravelAction extends Action {
 
-        private final Place to;
+        private final Location to;
 
-        private TravelAction(String travelMessage, Place to) {
-            super(DefaultActivity.this, "Travel", travelMessage);
+        private TravelAction(String travelMessage, Location to) {
+            super(LocationActivity.this, "Travel", travelMessage);
             this.to = to;
         }
 
@@ -58,7 +60,7 @@ public final class DefaultActivity extends Activity {
         protected void performAction(Player player) {
             final GameCore core = player.getCore();
             core.movePlayer(player, to);
-            core.changePlayerActivity(player, new DefaultActivity(to));
+            core.changePlayerActivity(player, new LocationActivity(to));
         }
     }
 }

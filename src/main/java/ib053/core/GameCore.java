@@ -1,13 +1,21 @@
 package ib053.core;
 
-import ib053.core.activities.DefaultActivity;
+import com.esotericsoftware.jsonbeans.JsonReader;
+import com.esotericsoftware.jsonbeans.JsonValue;
+import com.koloboke.collect.map.LongObjMap;
+import com.koloboke.collect.map.hash.HashLongObjMap;
+import com.koloboke.collect.map.hash.HashLongObjMaps;
+import com.koloboke.function.LongObjConsumer;
+import ib053.core.activities.LocationActivity;
 import ib053.frontend.Frontend;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.function.LongConsumer;
 
 /**
  * Stores the game's state and manages its lifecycle and boilerplate.
@@ -27,31 +35,60 @@ public final class GameCore {
         }
     };
 
+    private static final long STARTING_LOCATION_ID = 0;
+
+    public final LongObjMap<Location> worldLocations;
+    public final LongObjMap<Item> worldItems;
+
+    private final LongObjMap<List<Player>> playersInLocation;
+    private final LongObjMap<LocationActivity> locationActivities;
+
     private final List<Player> players = new ArrayList<>();
-    private final List<Place> places = new ArrayList<>();
-    private Place startingPlace;
 
     /** Creates the game core and starts the event loop, starting the game.
      * Handles the initialization of front-ends. */
-    public GameCore(Frontend...frontends) {
+    public GameCore(File locationFile, File itemFile, Frontend...frontends) {
         this.frontends = frontends;
 
-        // Temporary world creation
-        final Place newbieHill = new Place(this, 0, "Newbie Hill", "Smell of freshly cut grass and vistas of fields, " +
-                "mountains on the horizon and a small village in a nearby vale.");
-        final Place wensleyvale = new Place(this, 1, "Wensleyvale Village", "Small village fortified with a rotten palisade.");
-        final Place wensleyvaleForest = new Place(this, 2, "Wensleyvale Forest", "Lush forest, just beyond the Wensleyvale creek. Mostly safe, but still be careful.");
+        final JsonReader jsonReader = new JsonReader();
 
-        newbieHill.directions.put("Downhill towards the village", wensleyvale);
-        wensleyvale.directions.put("Up the Newbie hill", newbieHill);
-        wensleyvale.directions.put("Over the creek into the forest", wensleyvaleForest);
-        wensleyvaleForest.directions.put("Over the creek back to the village", wensleyvale);
+        { // Load locations
+            final JsonValue locationJson = jsonReader.parse(locationFile);
+            assert locationJson.isArray();
+            final HashLongObjMap<Location> locations = HashLongObjMaps.newMutableMap((int) (locationJson.size * 1.25f));
+            for (JsonValue value : locationJson) {
+                final Location location = Location.read(value);
+                final Location previous = locations.put(location.id, location);
+                if (previous != null) {
+                    throw new IllegalArgumentException("Locations " + location.name + " and " + previous.name + " share identical ID " + previous.id);
+                }
+            }
+            worldLocations = HashLongObjMaps.newImmutableMap(locations);
 
-        places.add(newbieHill);
-        places.add(wensleyvale);
-        places.add(wensleyvaleForest);
+            // Fill playersInLocation with ArrayLists
+            playersInLocation = HashLongObjMaps.newImmutableMap((map) -> {
+                worldLocations.keySet().forEach((LongConsumer) id -> map.accept(id, new ArrayList<>()));
+            });
 
-        startingPlace = newbieHill;
+            // Pre-create Location activities
+            locationActivities = HashLongObjMaps.newImmutableMap((map) -> {
+                worldLocations.forEach((LongObjConsumer<? super Location>) (id, location) -> map.accept(id, new LocationActivity(location)));
+            });
+        }
+
+        { // Load items
+            final JsonValue itemJson = jsonReader.parse(itemFile);
+            assert itemJson.isArray();
+            final HashLongObjMap<Item> items = HashLongObjMaps.newMutableMap((int) (itemJson.size * 1.25f));
+            for (JsonValue value : itemJson) {
+                final Item item = Item.read(value);
+                final Item previous = items.put(item.id, item);
+                if (previous != null) {
+                    throw new IllegalArgumentException("Items " + item.name + " and " + previous.name + " share identical ID " + previous.id);
+                }
+            }
+            worldItems = HashLongObjMaps.newImmutableMap(items);
+        }
 
         // Initialize this in the event loop, so that nothing may disrupt the initialization
         eventLoop.execute(() -> {
@@ -89,19 +126,24 @@ public final class GameCore {
     public void initNewPlayer(Player player) {
         assert player.currentActivity == null;
         assert player.location == null;
-        movePlayer(player, startingPlace);
-        changePlayerActivity(player, new DefaultActivity(startingPlace));
+
+        movePlayer(player, worldLocations.get(STARTING_LOCATION_ID));
+        changePlayerActivity(player, locationActivities.get(STARTING_LOCATION_ID));
     }
 
-    public void movePlayer(Player player, Place toPlace) {
+    public void movePlayer(Player player, Location toPlace) {
         assert player != null;
         assert toPlace != null;
 
         if (player.location != null) {
-            player.location.presentPlayers.remove(player);
+            final List<Player> playersInOldLocation = playersInLocation.get(player.location.id);
+            assert playersInOldLocation != null;
+            playersInOldLocation.remove(player);
         }
         player.location = toPlace;
-        toPlace.presentPlayers.add(player);
+        final List<Player> playersInNewLocation = playersInLocation.get(toPlace.id);
+        assert playersInNewLocation != null;
+        playersInNewLocation.add(player);
     }
 
     /**
@@ -185,4 +227,18 @@ public final class GameCore {
         return null;
     }
 
+    public void shutdown() {
+        eventLoop.shutdown();
+        try {
+            if(eventLoop.awaitTermination(10, TimeUnit.SECONDS)) {
+                System.out.println("Event loop terminated");
+            } else {
+                System.err.println("Event loop doesn't want to terminate, shutting down");
+                eventLoop.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            System.err.println("Event loop awaitTermination has been interrupted, shutting down");
+            eventLoop.shutdownNow();
+        }
+    }
 }
