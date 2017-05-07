@@ -11,6 +11,7 @@ import ib053.frontend.Frontend;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -39,6 +40,7 @@ public final class GameCore {
 
     public final LongObjMap<Location> worldLocations;
     public final LongObjMap<Item> worldItems;
+    public final LongObjMap<Enemy> worldEnemies;
 
     private final LongObjMap<List<Player>> playersInLocation;
     private final LongObjMap<LocationActivity> locationActivities;
@@ -47,7 +49,7 @@ public final class GameCore {
 
     /** Creates the game core and starts the event loop, starting the game.
      * Handles the initialization of front-ends. */
-    public GameCore(File locationFile, File itemFile, Frontend...frontends) {
+    public GameCore(File locationFile, File itemFile, File enemyFile, Frontend...frontends) {
         this.frontends = frontends;
 
         final JsonReader jsonReader = new JsonReader();
@@ -90,6 +92,20 @@ public final class GameCore {
             worldItems = HashLongObjMaps.newImmutableMap(items);
         }
 
+        { // Load enemies
+            final JsonValue itemJson = jsonReader.parse(enemyFile);
+            assert itemJson.isArray();
+            final HashLongObjMap<Enemy> enemies = HashLongObjMaps.newMutableMap((int) (itemJson.size * 1.25f));
+            for (JsonValue value : itemJson) {
+                final Enemy enemy = Enemy.read(value);
+                final Enemy previous = enemies.put(enemy.id, enemy);
+                if (previous != null) {
+                    throw new IllegalArgumentException("Enemies " + enemy.name + " and " + previous.name + " share identical ID " + previous.id);
+                }
+            }
+            worldEnemies = HashLongObjMaps.newImmutableMap(enemies);
+        }
+
         // Initialize this in the event loop, so that nothing may disrupt the initialization
         eventLoop.execute(() -> {
             for (Frontend frontend : frontends) {
@@ -118,7 +134,16 @@ public final class GameCore {
             }
         }
 
-        final Player player = new Player(this, id, name);
+        final Attributes attributes = new Attributes(true);
+        attributes.set(Attribute.LEVEL, 1);
+
+        attributes.set(Attribute.STRENGTH, 5);
+        attributes.set(Attribute.DEXTERITY, 5);
+        attributes.set(Attribute.AGILITY, 5);
+        attributes.set(Attribute.LUCK, 5);
+        attributes.set(Attribute.STAMINA, 5);
+
+        final Player player = new Player(this, id, name, attributes);
         players.add(player);
         return player;
     }
@@ -127,11 +152,11 @@ public final class GameCore {
         assert player.currentActivity == null;
         assert player.location == null;
 
-        movePlayer(player, worldLocations.get(STARTING_LOCATION_ID));
+        changePlayerLocation(player, worldLocations.get(STARTING_LOCATION_ID));
         changePlayerActivity(player, locationActivities.get(STARTING_LOCATION_ID));
     }
 
-    public void movePlayer(Player player, Location toPlace) {
+    public void changePlayerLocation(Player player, Location toPlace) {
         assert player != null;
         assert toPlace != null;
 
@@ -175,6 +200,13 @@ public final class GameCore {
         notifyPlayerActionsChanged(player);
     }
 
+    /** Changes the player's activity to default activity (LocationActivity, usually) */
+    public void changePlayerActivityToDefault(Player player) {
+        final LocationActivity locationActivity = locationActivities.get(player.getLocation().id);
+        assert locationActivity != null;
+        changePlayerActivity(player, locationActivity);
+    }
+
     /** Called when player has new actions to choose from.
      * Delegates this notification to frontends.
      * Called automatically when changing activity. */
@@ -200,6 +232,14 @@ public final class GameCore {
         }
     }
 
+    public void setActivityActions(Activity activity, Action...actions) {
+        activity.actions.clear();
+        Collections.addAll(activity.actions, actions);
+        for (Player engagedPlayer : activity.engagedPlayers) {
+            notifyPlayerActionsChanged(engagedPlayer);
+        }
+    }
+
     public void addActivityAction(Activity activity, Action action) {
         activity.actions.add(action);
         for (Player engagedPlayer : activity.engagedPlayers) {
@@ -215,6 +255,15 @@ public final class GameCore {
             return true;
         }
         return false;
+    }
+
+    public void clearActivityActions(Activity activity) {
+        if (!activity.actions.isEmpty()) {
+            activity.actions.clear();
+            for (Player engagedPlayer : activity.engagedPlayers) {
+                notifyPlayerActionsChanged(engagedPlayer);
+            }
+        }
     }
 
     /** @return Player prevously created with given ID, or null if no such player exists. */

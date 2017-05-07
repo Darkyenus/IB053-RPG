@@ -5,7 +5,7 @@ import ib053.core.*;
 import java.util.function.ObjLongConsumer;
 
 /**
- *
+ * Default activity for a location.
  */
 public final class LocationActivity extends Activity {
 
@@ -18,16 +18,42 @@ public final class LocationActivity extends Activity {
     @Override
     public void initialize() {
         final GameCore core = getCore();
-        core.addActivityAction(this, new Action(this, null, "Look around") {
+        core.addActivityAction(this, new Action(this, null, "Myself") {
 
             @Override
             protected void performAction(Player player) {
-                player.getCore().notifyPlayerEventHappened(player, new Event("You see absolutely nothing interesting."));
+                final StringBuilder sb = new StringBuilder();
+                sb.append("You are ").append(player.getName()).append("\n");
+                final int health = player.health;
+                final int maxHealth = player.getMaxHealth();
+                sb.append(health).append("/").append(maxHealth).append(" HP: ");
+                if (health >= maxHealth) {
+                    sb.append("You are feeling great!");
+                } else if (health > (maxHealth/4) * 3) {
+                    sb.append("You have some scratches");
+                } else if (health > (maxHealth / 2)) {
+                    sb.append("You are injured");
+                } else if (health > (maxHealth / 4)) {
+                    sb.append("You are badly injured");
+                } else {
+                    sb.append("You are barely standing");
+                }
+                sb.append('\n');
+
+                player.getCore().notifyPlayerEventHappened(player, new Event(sb.toString()));
             }
         });
         location.directions.forEach((ObjLongConsumer<? super String>) (message, place) -> {
             core.addActivityAction(this, new TravelAction(message, core.worldLocations.get(place)));
         });
+        if (location.hasEnemies()) {
+            core.addActivityAction(this, new Action(this, "Fight", "Look for something to kill") {
+                @Override
+                protected void performAction(Player player) {
+                    getCore().changePlayerActivity(player, new FightingActivity(getCore().worldEnemies.get(location.selectEnemyToFight()), player));
+                }
+            });
+        }
     }
 
     @Override
@@ -59,7 +85,7 @@ public final class LocationActivity extends Activity {
         @Override
         protected void performAction(Player player) {
             final GameCore core = player.getCore();
-            core.movePlayer(player, to);
+            core.changePlayerLocation(player, to);
             core.changePlayerActivity(player, new LocationActivity(to));
         }
     }

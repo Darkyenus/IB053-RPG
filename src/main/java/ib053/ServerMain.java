@@ -15,6 +15,6 @@ public class ServerMain {
             e.printStackTrace();
         });
 
-        new GameCore(new File("locations.json"), new File("items.json"), new CliFrontend());
+        new GameCore(new File("locations.json"), new File("items.json"), new File("enemies.json"), new CliFrontend());
     }
 }

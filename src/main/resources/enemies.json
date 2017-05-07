@@ -1,0 +1,31 @@
+[
+  {
+    "id":1,
+    "name":"Small Rat",
+    "description":"Towns are full of those pests",
+    "attributes": {
+      "LVL":1,
+      "STR":1,
+      "DEX":3,
+      "AGI":7,
+      "STA":1,
+      "LUCK":7,
+      "DMG":1,
+      "ARM":0
+    }
+  }, {
+    "id":2,
+    "name":"Rat",
+    "description":"Well fed from the city's trash",
+    "attributes": {
+      "LVL":2,
+      "STR":2,
+      "DEX":3,
+      "AGI":7,
+      "STA":2,
+      "LUCK":10,
+      "DMG":3,
+      "ARM":1
+    }
+  }
+]

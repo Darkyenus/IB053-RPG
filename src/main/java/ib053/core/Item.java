@@ -1,7 +1,5 @@
 package ib053.core;
 
-import com.esotericsoftware.jsonbeans.Json;
-import com.esotericsoftware.jsonbeans.JsonSerializer;
 import com.esotericsoftware.jsonbeans.JsonValue;
 
 /**
@@ -38,7 +36,7 @@ public final class Item {
         final String lore = jsonValue.getString("lore", null);
 
         final int value = jsonValue.getInt("value", 0);
-        final Attributes attributes = Attributes.read(jsonValue.get("attributes"));
+        final Attributes attributes = Attributes.read(jsonValue.get("attributes"), false);
 
         //TODO Check invalid attributes and warn about them
 

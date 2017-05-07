@@ -79,7 +79,7 @@ public class CliFrontend implements Frontend {
         out.append("\n\n\n\n\n\n\n\n\n\n").append(ERASE_DISPLAY);
 
         out.append(attribute(BOLD)).append("Events:\n");
-        while (lastEvents.size() > 5) {
+        while (lastEvents.size() > 10) {
             lastEvents.remove(0);
         }
 

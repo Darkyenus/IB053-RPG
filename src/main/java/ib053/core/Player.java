@@ -3,18 +3,21 @@ package ib053.core;
 /**
  * Represents the player and their character.
  */
-public final class Player {
+public final class Player implements AttributeHolder {
 
     private final GameCore core;
     private final long id;
     private final String name;
+
+    public final Attributes attributes;
+    public int health;
 
     /** Do not modify.
      * @see GameCore#changePlayerActivity(Player, Activity) */
     Activity currentActivity;
 
     /** Do not modify.
-     * @see GameCore#movePlayer(Player, Location) */
+     * @see GameCore#changePlayerLocation(Player, Location) */
     Location location;
 
     public GameCore getCore() {
@@ -41,9 +44,17 @@ public final class Player {
         return currentActivity;
     }
 
-    Player(GameCore core, long id, String name) {
+
+    Player(GameCore core, long id, String name, Attributes attributes) {
         this.core = core;
         this.id = id;
         this.name = name;
+        this.attributes = attributes;
+        this.health = attributes.get(Attribute.STAMINA) * 5;
+    }
+
+    @Override
+    public int get(Attribute attribute) {
+        return attributes.get(attribute);
     }
 }

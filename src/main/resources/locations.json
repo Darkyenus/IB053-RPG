@@ -9,17 +9,26 @@
   }, {
     "id":1,
     "name":"Wensleyvale Village",
-    "description":"Small village fortified with an old wooden palisade."
+    "description":"Small village fortified with an old wooden palisade.",
     "directions":{
       "Up the Newbie hill":0,
       "Over the creek into the forest":2
+    },
+    "enemies": {
+      "1":0.5,
+      "2":0.4
     }
   }, {
     "id":2,
     "name":"Wensleyvale Forest",
     "description":"Lush forest, just beyond the Wensleyvale creek. Mostly safe, but still be careful.",
+    "graveyard":1,
     "directions":{
       "Over the creek back to the village":1
+    },
+    "enemies": {
+      "1":0.5,
+      "2":0.1
     }
   }
 ]
