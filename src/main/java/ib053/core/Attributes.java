@@ -44,6 +44,36 @@ public final class Attributes implements AttributeHolder {
         modifiers[attribute.ordinal()] = value;
     }
 
+    /** Add to value of given attribute.
+     * Valid call only on mutable Attributes.
+     * Stored value is not clamped.
+     * @return new value */
+    public int add(Attribute attribute, int value) {
+        assert attribute != null;
+        if (!mutable) throw new UnsupportedOperationException("Can't set attribute of immutable Attributes");
+        modifiers[attribute.ordinal()] += value;
+        return get(attribute);
+    }
+
+    /** Creates a mutable copy of given base, use with {@link #and(Attributes)} */
+    public static Attributes combinationOf(Attributes base) {
+        final Attributes result = new Attributes(true);
+        System.arraycopy(base.modifiers, 0, result.modifiers, 0, Attribute.VALUES.length);
+        return result;
+    }
+
+    /** Adds other attributes into these attributes and returns this */
+    public Attributes and(Attributes other) {
+        assert other != null;
+        if (!mutable) throw new UnsupportedOperationException("Can't set attribute of immutable Attributes");
+
+        for (int i = 0; i < Attribute.VALUES.length; i++) {
+            this.modifiers[i] += other.modifiers[i];
+        }
+
+        return this;
+    }
+
     public static Attributes read(JsonValue jsonValue, boolean mutable) {
         final Attributes attributes = new Attributes(mutable);
         for (Attribute attribute : Attribute.VALUES) {

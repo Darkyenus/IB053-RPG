@@ -31,4 +31,9 @@ public interface AttributeHolder {
     default boolean luckCheck(AttributeHolder opponent) {
         return luckCheck(opponent.get(Attribute.LUCK));
     }
+
+    default int getXpToNextLevel() {
+        final int level = get(Attribute.LEVEL);
+        return (int) Math.ceil(Math.log10(level + 200) * Math.pow(level, 0.7) * 1.2 + 10);
+    }
 }

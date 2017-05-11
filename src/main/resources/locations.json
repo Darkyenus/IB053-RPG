@@ -15,8 +15,8 @@
       "Over the creek into the forest":2
     },
     "enemies": {
-      "1":0.5,
-      "2":0.4
+      "1":0.7,
+      "2":0.1
     }
   }, {
     "id":2,
@@ -27,8 +27,8 @@
       "Over the creek back to the village":1
     },
     "enemies": {
-      "1":0.5,
-      "2":0.1
+      "1":0.4,
+      "2":0.7
     }
   }
 ]

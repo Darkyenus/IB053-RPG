@@ -29,6 +29,22 @@ public final class Item {
         this.attributes = attributes;
     }
 
+    public void toString(StringBuilder sb, CharSequence separator) {
+        sb.append(name);
+        if (value != VALUE_CANT_SELL) {
+            sb.append(separator).append(value).append(" ¤");
+        }
+        if (lore != null) {
+            sb.append(separator).append(lore);
+        }
+        for (Attribute attribute : Attribute.VALUES) {
+            if (attribute.type == Attribute.AttributeType.CHARACTER) continue;
+            final int value = attributes.get(attribute);
+            if (value == 0) continue;
+            sb.append(separator).append(attribute.shortName).append(": ").append(value);
+        }
+    }
+
     public static Item read(JsonValue jsonValue) {
         final long id = jsonValue.getLong("id");
         final ItemType type = ItemType.valueOf(jsonValue.getString("type").toUpperCase());
@@ -46,12 +62,22 @@ public final class Item {
     public static final int VALUE_CANT_SELL = -1;
 
     public enum ItemType {
-        WEAPON,
-        ARMOR_HEAD,
-        ARMOR_CHEST,
-        ARMOR_LEGS,
-        ARMOR_RING,
-        SHIELD,
-        JUNK
+        WEAPON(true, "Weapon"),
+        ARMOR_HEAD(true, "Head"),
+        ARMOR_CHEST(true, "Chest"),
+        ARMOR_LEGS(true, "Legs"),
+        ARMOR_RING(true, "Ring"),
+        SHIELD(true, "Shield"),
+        JUNK(false, "Junk");
+
+        public final boolean canEquip;
+        public final String name;
+
+        ItemType(boolean canEquip, String name) {
+            this.canEquip = canEquip;
+            this.name = name;
+        }
+
+        public static final ItemType[] VALUES = values();
     }
 }

@@ -20,12 +20,15 @@ public class BeingDeadActivity extends Activity {
 
     @Override
     public void initialize() {
-        //TODO Fix this when XP implemented
-        getCore().addActivityAction(this, new Action(this, "Limbo", "Sell your soul (lose HALF_OF_PROGRESS_TO_NEXT_LEVEL XP)") {
+        getCore().addActivityAction(this, new Action(this, "Limbo", "Sell your soul for all your experience! (on this level)") {
             @Override
             protected void performAction(Player player) {
-                //TODO Lose XP
-                resurrect(player);
+                if (player.experience <= 0) {
+                    getCore().notifyPlayerEventHappened(player, new Event("FOOL! YOU DON'T HAVE ANY EXPERIENCE! YOU HAVE NOTHING TO OFFER!"));
+                } else {
+                    player.experience = 0;
+                    resurrect(player);
+                }
             }
         });
 
@@ -63,7 +66,7 @@ public class BeingDeadActivity extends Activity {
 
     @Override
     public String getDescription(Player player) {
-        return "You are dead. Sell your soul or wait for an eternity";
+        return "You are dead. Sell your soul (if you have any) or wait for an eternity";
     }
 
     @Override

@@ -19,7 +19,7 @@ public final class FightingActivity extends Activity {
     private final Action attackAction, fleeAction;
     private final Runnable tryEnemyTurn;
 
-    public FightingActivity(Enemy enemy, Player player) {
+    FightingActivity(Enemy enemy, Player player) {
         this.enemy = enemy;
         this.player = player;
 
@@ -33,15 +33,18 @@ public final class FightingActivity extends Activity {
                 if (playerAttackDamage > 0) {
                     enemyHealth -= playerAttackDamage;
                     getCore().notifyPlayerEventHappened(player, new Event("You attack for "+playerAttackDamage+"!"));
-                    getCore().notifyPlayerEventHappened(player, new Event(enemy.name+" is down to "+enemyHealth+"/"+enemy.getMaxHealth()+" HP!"));
+                    //if (enemyHealth > 0) getCore().notifyPlayerEventHappened(player, new Event(enemy.name+" is down to "+enemyHealth+"/"+enemy.getMaxHealth()+" HP!"));
                 } else {
                     getCore().notifyPlayerEventHappened(player, new Event("You attack, but miss!"));
                 }
 
                 if (enemyHealth <= 0) {
                     // Game over
+                    final int killExperience = enemy.killExperience;
                     getCore().notifyPlayerEventHappened(player, new Event(enemy.name+" lies defeated!"));
+
                     getCore().changePlayerActivityToDefault(player);
+                    getCore().giveExperience(player, killExperience);
                 } else {
                     nextTurn();
                 }
@@ -76,7 +79,7 @@ public final class FightingActivity extends Activity {
                 if (enemyAttackDamage > 0) {
                     player.health -= enemyAttackDamage;
                     getCore().notifyPlayerEventHappened(player, new Event(enemy.name+" attacks for "+enemyAttackDamage+"!"));
-                    getCore().notifyPlayerEventHappened(player, new Event("You are down to "+player.health+"/"+player.getMaxHealth()+" HP!"));
+                    //if (player.health > 0) getCore().notifyPlayerEventHappened(player, new Event("You are down to "+player.health+"/"+player.getMaxHealth()+" HP!"));
                 } else {
                     getCore().notifyPlayerEventHappened(player, new Event(enemy.name+" attacks, but misses!"));
                 }
@@ -164,7 +167,7 @@ public final class FightingActivity extends Activity {
 
     @Override
     public String getDescription(Player player) {
-        return "A fight against "+enemy.name+"!";
+        return "A fight against "+enemy.name+"!\nYou: "+player.health+"/"+player.getMaxHealth()+" HP\n"+enemy.name+" "+enemyHealth+"/"+enemy.getMaxHealth()+" HP";
     }
 
     @Override

@@ -28,7 +28,7 @@ public class RandomUtil {
 
     /** Picks randomly first (true) or second (false) with given weights, which can be from range [0, inf) */
     public static boolean chooseFirst(float firstWeight, float secondWeight) {
-        return firstWeight < (RANDOM.nextFloat() * (firstWeight + secondWeight));
+        return firstWeight > (RANDOM.nextFloat() * (firstWeight + secondWeight));
     }
 
     public static float clamp(float value, float min, float max) {

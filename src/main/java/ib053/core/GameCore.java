@@ -6,6 +6,7 @@ import com.koloboke.collect.map.LongObjMap;
 import com.koloboke.collect.map.hash.HashLongObjMap;
 import com.koloboke.collect.map.hash.HashLongObjMaps;
 import com.koloboke.function.LongObjConsumer;
+import ib053.core.activities.LevelUpActivity;
 import ib053.core.activities.LocationActivity;
 import ib053.frontend.Frontend;
 
@@ -152,6 +153,7 @@ public final class GameCore {
         assert player.currentActivity == null;
         assert player.location == null;
 
+        player.setEquipment(worldItems.get(1));//Give player dull knife
         changePlayerLocation(player, worldLocations.get(STARTING_LOCATION_ID));
         changePlayerActivity(player, locationActivities.get(STARTING_LOCATION_ID));
     }
@@ -175,7 +177,7 @@ public final class GameCore {
      * Change activity that player is engaged in.
      * This is the only way to change player's activity.
      *
-     * Calls respective Activity.begin/endActivity() and {@link #notifyPlayerActionsChanged(Player)}.
+     * Calls respective Activity.begin/endActivity() and {@link #notifyPlayerActivityChanged(Player)}.
      */
     public void changePlayerActivity(Player player, Activity newActivity) {
         assert player != null;
@@ -197,7 +199,7 @@ public final class GameCore {
         player.currentActivity.engagedPlayers.add(player);
         newActivity.beginActivity(player);
 
-        notifyPlayerActionsChanged(player);
+        notifyPlayerActivityChanged(player);
     }
 
     /** Changes the player's activity to default activity (LocationActivity, usually) */
@@ -210,7 +212,7 @@ public final class GameCore {
     /** Called when player has new actions to choose from.
      * Delegates this notification to frontends.
      * Called automatically when changing activity. */
-    private void notifyPlayerActionsChanged(Player player) {
+    public void notifyPlayerActivityChanged(Player player) {
         for (Frontend frontend : frontends) {
             frontend.playerActivityChanged(player);
         }
@@ -224,11 +226,22 @@ public final class GameCore {
         }
     }
 
+    public void giveExperience(Player player, int experiencePoints) {
+        player.experience += experiencePoints;
+        final int xpToNextLevel = player.getXpToNextLevel();
+        if (player.experience >= xpToNextLevel) {
+            notifyPlayerEventHappened(player, new Event("You have gained "+experiencePoints+" xp"));
+            changePlayerActivity(player, LevelUpActivity.INSTANCE);
+        } else {
+            notifyPlayerEventHappened(player, new Event("You have gained "+experiencePoints+" xp ("+(player.experience * 100 / xpToNextLevel)+"% to next level)"));
+        }
+    }
+
     public void setActivityActions(Activity activity, List<Action> actions) {
         activity.actions.clear();
         activity.actions.addAll(actions);
         for (Player engagedPlayer : activity.engagedPlayers) {
-            notifyPlayerActionsChanged(engagedPlayer);
+            notifyPlayerActivityChanged(engagedPlayer);
         }
     }
 
@@ -236,21 +249,21 @@ public final class GameCore {
         activity.actions.clear();
         Collections.addAll(activity.actions, actions);
         for (Player engagedPlayer : activity.engagedPlayers) {
-            notifyPlayerActionsChanged(engagedPlayer);
+            notifyPlayerActivityChanged(engagedPlayer);
         }
     }
 
     public void addActivityAction(Activity activity, Action action) {
         activity.actions.add(action);
         for (Player engagedPlayer : activity.engagedPlayers) {
-            notifyPlayerActionsChanged(engagedPlayer);
+            notifyPlayerActivityChanged(engagedPlayer);
         }
     }
 
     public boolean removeActivityAction(Activity activity, Action action) {
         if(activity.actions.remove(action)) {
             for (Player engagedPlayer : activity.engagedPlayers) {
-                notifyPlayerActionsChanged(engagedPlayer);
+                notifyPlayerActivityChanged(engagedPlayer);
             }
             return true;
         }
@@ -261,7 +274,7 @@ public final class GameCore {
         if (!activity.actions.isEmpty()) {
             activity.actions.clear();
             for (Player engagedPlayer : activity.engagedPlayers) {
-                notifyPlayerActionsChanged(engagedPlayer);
+                notifyPlayerActivityChanged(engagedPlayer);
             }
         }
     }
