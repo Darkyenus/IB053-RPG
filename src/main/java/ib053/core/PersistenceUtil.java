@@ -1,14 +1,40 @@
 package ib053.core;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
+import com.esotericsoftware.jsonbeans.Json;
+import com.esotericsoftware.jsonbeans.OutputType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.*;
+import java.util.function.Consumer;
 
 /**
  *
  */
 public class PersistenceUtil {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PersistenceUtil.class);
+
+    public static void saveJsonSecurely(File to, Consumer<Json> serialize) throws PersistenceException {
+        final Json json = new Json(OutputType.json);
+        final StringWriter writer = new StringWriter();
+        json.setWriter(writer);
+
+        try {
+            serialize.accept(json);
+        } catch (Exception ex) {
+            throw new PersistenceException("Serialization failure", ex);
+        }
+
+        final CharSequence playersJsonString = writer.getBuffer();
+
+        try {
+            PersistenceUtil.saveSecurely(playersJsonString, to);
+        } catch (PersistenceException ex) {
+            LOG.error("Failed to save json to file {}, json contents: {}", to, playersJsonString);
+            throw new PersistenceException("IO failure", ex);
+        }
+    }
 
     /** Save given CharSequence into a file in a way that fails gracefully and does not lose data on failure. */
     public static void saveSecurely(CharSequence data, File to) throws PersistenceException {
@@ -61,6 +87,8 @@ public class PersistenceUtil {
         if(!savingFile.renameTo(canonicalTo)) {
             throw new PersistenceException("Can't rename .saving file");
         }
+
+        LOG.debug("Data successfully saved into {}", canonicalTo);
     }
 
     public static final class PersistenceException extends Exception {

@@ -16,7 +16,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.StringWriter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -133,7 +132,7 @@ public final class GameCore {
         }
 
         { // Load activities
-            activityCache = new ActivityCache(activityFile);
+            activityCache = new ActivityCache(activityFile, this);
             activityCache.load();
         }
 
@@ -252,13 +251,6 @@ public final class GameCore {
             player.currentActivity.engagedPlayers.remove(player);
         }
 
-        if (newActivity.core == null) {
-            newActivity.core = this;
-            newActivity.initialize();
-        } else if (newActivity.core != this) {
-            throw new IllegalArgumentException("Activity "+newActivity+" already assigned to a different core!");
-        }
-
         player.currentActivity = newActivity;
         player.currentActivity.engagedPlayers.add(player);
         newActivity.beginActivity(player);
@@ -270,6 +262,7 @@ public final class GameCore {
         assert customActivity != null;
         assert activityCache.getActivityType(customActivity.getClass()) == ActivityType.CUSTOM_ACTIVITY;
 
+        activityCache.ensureInitialized(customActivity);
         changePlayerActivityNoCheck(player, customActivity);
     }
 
@@ -310,51 +303,9 @@ public final class GameCore {
         final int xpToNextLevel = player.getXpToNextLevel();
         if (player.experience >= xpToNextLevel) {
             notifyPlayerEventHappened(player, new Event("You have gained "+experiencePoints+" xp"));
-            changePlayerActivity(player, LevelUpActivity.INSTANCE);
+            changePlayerActivity(player, LevelUpActivity.class);
         } else {
             notifyPlayerEventHappened(player, new Event("You have gained "+experiencePoints+" xp ("+(player.experience * 100 / xpToNextLevel)+"% to next level)"));
-        }
-    }
-
-    public void setActivityActions(ActivityBase activity, List<Action> actions) {
-        activity.actions.clear();
-        activity.actions.addAll(actions);
-        for (Player engagedPlayer : activity.engagedPlayers) {
-            notifyPlayerActivityChanged(engagedPlayer);
-        }
-    }
-
-    public void setActivityActions(ActivityBase activity, Action...actions) {
-        activity.actions.clear();
-        Collections.addAll(activity.actions, actions);
-        for (Player engagedPlayer : activity.engagedPlayers) {
-            notifyPlayerActivityChanged(engagedPlayer);
-        }
-    }
-
-    public void addActivityAction(ActivityBase activity, Action action) {
-        activity.actions.add(action);
-        for (Player engagedPlayer : activity.engagedPlayers) {
-            notifyPlayerActivityChanged(engagedPlayer);
-        }
-    }
-
-    public boolean removeActivityAction(ActivityBase activity, Action action) {
-        if(activity.actions.remove(action)) {
-            for (Player engagedPlayer : activity.engagedPlayers) {
-                notifyPlayerActivityChanged(engagedPlayer);
-            }
-            return true;
-        }
-        return false;
-    }
-
-    public void clearActivityActions(ActivityBase activity) {
-        if (!activity.actions.isEmpty()) {
-            activity.actions.clear();
-            for (Player engagedPlayer : activity.engagedPlayers) {
-                notifyPlayerActivityChanged(engagedPlayer);
-            }
         }
     }
 
@@ -390,24 +341,18 @@ public final class GameCore {
         }
 
         { // Save players
-            final Json playersJson = new Json(OutputType.json);
-            final StringWriter writer = new StringWriter();
-            playersJson.setWriter(writer);
-
-            playersJson.writeArrayStart();
-            for (Player player : players.values()) {
-                Player.write(playersJson, player);
-            }
-            playersJson.writeArrayEnd();
-            final CharSequence playersJsonString = writer.getBuffer();
-
             try {
                 final File playerFile = new File(stateFolder, PLAYER_FILE_NAME);
-                PersistenceUtil.saveSecurely(playersJsonString, playerFile);
+                PersistenceUtil.saveJsonSecurely(playerFile, json -> {
+                    json.writeArrayStart();
+                    for (Player player : players.values()) {
+                        Player.write(json, player);
+                    }
+                    json.writeArrayEnd();
+                });
                 LOG.info("{} players saved to {}", players.size(), playerFile);
             } catch (PersistenceUtil.PersistenceException e) {
                 LOG.error("Failed to save players file", e);
-                LOG.error("Contents of players file: {}", playersJsonString.toString());
             }
         }
 

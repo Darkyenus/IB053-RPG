@@ -6,37 +6,28 @@ import ib053.core.*;
  * Manages level up
  */
 @Activity(ActivityType.SINGLETON_ACTIVITY)
-public class LevelUpActivity extends ActivityBase {
-
-    public static final LevelUpActivity INSTANCE = new LevelUpActivity();
+public final class LevelUpActivity extends ActivityBase {
 
     private static final int VIRTUE_POINTS_PER_LEVEL = 2;
 
     private LevelUpActivity() {
-    }
-
-    @Override
-    public void initialize() {
         for (Attribute attribute : Attribute.VALUES) {
             if (attribute.type != Attribute.AttributeType.VIRTUE || attribute == Attribute.LUCK) continue;
 
-            final Action addPoint = new Action(this, "Add virtue point to", attribute.shortName) {
+            action("level-up,virtue."+attribute.name(),
+                    "Add virtue point", "To "+attribute.shortName,
+                    player -> {
+                        if (player.virtuePoints > 0) {//Just in case
+                            player.attributes.add(attribute, 1);
+                            player.virtuePoints -= 1;
+                        }
 
-                @Override
-                protected void performAction(Player player) {
-                    if (player.virtuePoints > 0) {//Just in case
-                        player.attributes.add(attribute, 1);
-                        player.virtuePoints -= 1;
-                    }
-
-                    if (player.virtuePoints <= 0) {
-                        getCore().changePlayerActivityToDefault(player);
-                    } else {
-                        getCore().notifyPlayerActivityChanged(player);
-                    }
-                }
-            };
-            getCore().addActivityAction(this, addPoint);
+                        if (player.virtuePoints <= 0) {
+                            core().changePlayerActivityToDefault(player);
+                        } else {
+                            core().notifyPlayerActivityChanged(player);
+                        }
+                    });
         }
     }
 
@@ -64,8 +55,4 @@ public class LevelUpActivity extends ActivityBase {
         return sb.toString();
     }
 
-    @Override
-    public void endActivity(Player player) {
-
-    }
 }

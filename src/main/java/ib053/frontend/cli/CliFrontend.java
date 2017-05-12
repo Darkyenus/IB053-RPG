@@ -51,6 +51,7 @@ public class CliFrontend implements Frontend {
             assert player != null;
             core.initNewPlayer(player);
         } else {
+            availableActions.addAll(player.getActivity().getActions());
             redraw();
         }
 

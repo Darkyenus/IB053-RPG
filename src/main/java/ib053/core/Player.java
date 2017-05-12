@@ -134,10 +134,14 @@ public final class Player implements AttributeHolder {
                 } else if (activityData != null) {
                     LOG.warn("Player has activityData for "+activityClass+" but that is not serializable");
                 }
+
+                core.activityCache.ensureInitialized(activityBase);
+                player.currentActivity = activityBase;
                 break;
             default:
                 throw new IllegalArgumentException("Invalid activity type "+activityType+" of "+activityClass);
         }
+        player.currentActivity.engagedPlayers.add(player);
 
         for (JsonValue equipment : value.get("equipment")) {
             final long itemId = equipment.asLong();

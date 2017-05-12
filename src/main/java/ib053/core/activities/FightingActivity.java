@@ -20,11 +20,43 @@ public final class FightingActivity extends ActivityBase implements ActivityBase
     private Player player;
     private int playerInitiative;
 
-    private transient Action attackAction, fleeAction;
-    private transient Runnable tryEnemyTurn;
-
     @SerializationConstructor
     private FightingActivity() {
+        action("fighting.combat.attack", "Combat", "Attack!", player -> {
+            allActionsSetEnabled(false);
+            enemyInitiative += getEnemyInitiative();
+
+            final int playerAttackDamage = resolveAttack(player, enemy);
+            if (playerAttackDamage > 0) {
+                enemyHealth -= playerAttackDamage;
+                core().notifyPlayerEventHappened(player, new Event("You attack for "+playerAttackDamage+"!"));
+            } else {
+                core().notifyPlayerEventHappened(player, new Event("You attack, but miss!"));
+            }
+
+            if (enemyHealth <= 0) {
+                // Game over
+                final int killExperience = enemy.killExperience;
+                core().notifyPlayerEventHappened(player, new Event(enemy.name+" lies defeated!"));
+
+                core().changePlayerActivityToDefault(player);
+                core().giveExperience(player, killExperience);
+            } else {
+                nextTurn();
+            }
+        }).setEnabled(false);
+
+        action("fighting.combat.flee", "Combat", "Run away!", player -> {
+            if (RandomUtil.chooseFirst(player.get(Attribute.LUCK), enemy.get(Attribute.LUCK))) {
+                // Flee successful
+                core().notifyPlayerEventHappened(player, new Event("You flee to safety!"));
+                core().changePlayerActivityToDefault(player);
+            } else {
+                core().notifyPlayerEventHappened(player, new Event("Can't run away!"));
+                enemyInitiative += getEnemyInitiative();
+                nextTurn();
+            }
+        }).setEnabled(false);
     }
 
     @Override
@@ -43,8 +75,6 @@ public final class FightingActivity extends ActivityBase implements ActivityBase
         enemyInitiative = json.getInt("enemyInitiative");
         player = core.findPlayer(json.getInt("playerId"));
         playerInitiative = json.getInt("playerInitiative");
-
-        init();
     }
 
     FightingActivity(Enemy enemy, Player player) {
@@ -53,7 +83,7 @@ public final class FightingActivity extends ActivityBase implements ActivityBase
     }
 
     private void nextTurn() {
-        getCore().schedule(FightingActivity.this.tryEnemyTurn, 1, TimeUnit.SECONDS);
+        core().schedule(FightingActivity.this::tryEnemyTurn, 1, TimeUnit.SECONDS);
     }
 
     private int getEnemyInitiative() {
@@ -104,92 +134,45 @@ public final class FightingActivity extends ActivityBase implements ActivityBase
         }
     }
 
-    private void init() {
-        attackAction = new Action(this, "Combat", "Attack!") {
-            @Override
-            protected void performAction(Player player) {
-                getCore().clearActivityActions(FightingActivity.this);
-                enemyInitiative += getEnemyInitiative();
+    private void tryEnemyTurn() {
+        if (enemyInitiative > playerInitiative
+                || (enemyInitiative == playerInitiative && RandomUtil.chooseFirst(
+                enemy.get(Attribute.LUCK), player.get(Attribute.LUCK)))) {
 
-                final int playerAttackDamage = resolveAttack(player, enemy);
-                if (playerAttackDamage > 0) {
-                    enemyHealth -= playerAttackDamage;
-                    getCore().notifyPlayerEventHappened(player, new Event("You attack for "+playerAttackDamage+"!"));
-                    //if (enemyHealth > 0) getCore().notifyPlayerEventHappened(player, new Event(enemy.name+" is down to "+enemyHealth+"/"+enemy.getMaxHealth()+" HP!"));
-                } else {
-                    getCore().notifyPlayerEventHappened(player, new Event("You attack, but miss!"));
-                }
+            allActionsSetEnabled(false);
+            playerInitiative += getPlayerInitiative();
 
-                if (enemyHealth <= 0) {
-                    // Game over
-                    final int killExperience = enemy.killExperience;
-                    getCore().notifyPlayerEventHappened(player, new Event(enemy.name+" lies defeated!"));
-
-                    getCore().changePlayerActivityToDefault(player);
-                    getCore().giveExperience(player, killExperience);
-                } else {
-                    nextTurn();
-                }
-            }
-        };
-
-        fleeAction = new Action(this, "Combat", "Run away!") {
-            @Override
-            protected void performAction(Player player) {
-                if (RandomUtil.chooseFirst(player.get(Attribute.LUCK), enemy.get(Attribute.LUCK))) {
-                    // Flee successful
-                    getCore().notifyPlayerEventHappened(player, new Event("You flee to safety!"));
-                    getCore().changePlayerActivityToDefault(player);
-                } else {
-                    getCore().notifyPlayerEventHappened(player, new Event("Can't run away!"));
-                    enemyInitiative += getEnemyInitiative();
-                    nextTurn();
-                }
-            }
-        };
-
-        tryEnemyTurn = () -> {
-            if (enemyInitiative > playerInitiative
-                    || (enemyInitiative == playerInitiative && RandomUtil.chooseFirst(
-                    enemy.get(Attribute.LUCK), player.get(Attribute.LUCK)))) {
-
-                getCore().clearActivityActions(this);
-                playerInitiative += getPlayerInitiative();
-
-                // Enemy turn
-                final int enemyAttackDamage = resolveAttack(enemy, player);
-                if (enemyAttackDamage > 0) {
-                    player.health -= enemyAttackDamage;
-                    getCore().notifyPlayerEventHappened(player, new Event(enemy.name+" attacks for "+enemyAttackDamage+"!"));
-                    //if (player.health > 0) getCore().notifyPlayerEventHappened(player, new Event("You are down to "+player.health+"/"+player.getMaxHealth()+" HP!"));
-                } else {
-                    getCore().notifyPlayerEventHappened(player, new Event(enemy.name+" attacks, but misses!"));
-                }
-
-                if (player.health <= 0) {
-                    // Game over
-                    getCore().notifyPlayerEventHappened(player, new Event("💀 You died"));
-                    getCore().changePlayerActivity(player, BeingDeadActivity.class);
-                }
-
-                nextTurn();
+            // Enemy turn
+            final int enemyAttackDamage = resolveAttack(enemy, player);
+            if (enemyAttackDamage > 0) {
+                player.health -= enemyAttackDamage;
+                core().notifyPlayerEventHappened(player, new Event(enemy.name+" attacks for "+enemyAttackDamage+"!"));
+                //if (player.health > 0) getCore().notifyPlayerEventHappened(player, new Event("You are down to "+player.health+"/"+player.getMaxHealth()+" HP!"));
             } else {
-                // Player turn
-                getCore().setActivityActions(this, attackAction, fleeAction);
+                core().notifyPlayerEventHappened(player, new Event(enemy.name+" attacks, but misses!"));
             }
-        };
+
+            if (player.health <= 0) {
+                // Game over
+                core().notifyPlayerEventHappened(player, new Event("💀 You died"));
+                core().changePlayerActivity(player, BeingDeadActivity.class);
+            }
+
+            nextTurn();
+        } else {
+            // Player turn
+            allActionsSetEnabled(true);
+        }
     }
 
     @Override
     public void initialize() {
-        init();
-
         this.enemyHealth = enemy.getMaxHealth();
         enemyInitiative = getEnemyInitiative();
         playerInitiative = getPlayerInitiative();
 
-        getCore().notifyPlayerEventHappened(player, new Event("A fight with "+enemy.name+"!\n"+enemy.description));
-        tryEnemyTurn.run();
+        core().notifyPlayerEventHappened(player, new Event("A fight with "+enemy.name+"!\n"+enemy.description));
+        tryEnemyTurn();
     }
 
     @Override
