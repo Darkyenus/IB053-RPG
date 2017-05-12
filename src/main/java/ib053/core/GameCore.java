@@ -62,7 +62,7 @@ public final class GameCore {
     private final LongObjMap<List<Player>> playersInLocation;
 
     private static final String ACTIVITY_FILE_NAME = "activities.json";
-    final ActivityCache activityCache;
+    private final ActivityCache activityCache;
 
     /** Creates the game core and starts the event loop, starting the game.
      * Handles the initialization of front-ends. */
@@ -314,21 +314,56 @@ public final class GameCore {
         }
     }
 
-    /** @return Player previously created with given ID, or null if no such player exists. */
+    /** @return Player with given ID or null if no such player exists */
     public Player findPlayer(long playerId) {
         return players.get(playerId);
     }
 
+    /** @return Player with given ID
+     * @throws IllegalArgumentException if not such player exists */
+    public Player getPlayer(long playerId) {
+        final Player result = players.get(playerId);
+        if (result == null) throw new IllegalArgumentException("Unknown player "+playerId);
+        return result;
+    }
+
+    /** @return Location with given ID or null if no such location exists */
     public Location findLocation(long locationId) {
         return worldLocations.get(locationId);
     }
 
+    /** @return Location with given ID
+     * @throws IllegalArgumentException if not such location exists */
+    public Location getLocation(long locationId) {
+        final Location result = worldLocations.get(locationId);
+        if (result == null) throw new IllegalArgumentException("Unknown location "+locationId);
+        return result;
+    }
+
+    /** @return Item with given ID or null if no such item exists */
     public Item findItem(long itemId) {
         return worldItems.get(itemId);
     }
 
+    /** @return Item with given ID
+     * @throws IllegalArgumentException if not such item exists */
+    public Item getItem(long itemId) {
+        final Item result = worldItems.get(itemId);
+        if (result == null) throw new IllegalArgumentException("Unknown item "+itemId);
+        return result;
+    }
+
+    /** @return Enemy with given ID or null if no such enemy exists */
     public Enemy findEnemy(long enemyId) {
         return worldEnemies.get(enemyId);
+    }
+
+    /** @return Enemy with given ID
+     * @throws IllegalArgumentException if not such enemy exists */
+    public Enemy getEnemy(long enemyId) {
+        final Enemy result = worldEnemies.get(enemyId);
+        if (result == null) throw new IllegalArgumentException("Unknown enemy "+enemyId);
+        return result;
     }
 
     public void shutdown() {

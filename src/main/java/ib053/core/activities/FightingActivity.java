@@ -70,10 +70,10 @@ public final class FightingActivity extends ActivityBase implements ActivityBase
 
     @Override
     public void read(GameCore core, JsonValue json) {
-        enemy = core.findEnemy(json.getLong("enemyId"));
+        enemy = core.getEnemy(json.getLong("enemyId"));
         enemyHealth = json.getInt("enemyHealth");
         enemyInitiative = json.getInt("enemyInitiative");
-        player = core.findPlayer(json.getInt("playerId"));
+        player = core.getPlayer(json.getInt("playerId"));
         playerInitiative = json.getInt("playerInitiative");
 
         tryEnemyTurn();//TODO Proper task serialization!!!

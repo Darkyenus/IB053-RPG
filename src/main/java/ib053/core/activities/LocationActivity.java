@@ -67,13 +67,13 @@ public final class LocationActivity extends ActivityBase {
                     "Travel", message,
                     player -> {
                 final GameCore core = player.getCore();
-                final Location to = core.findLocation(place);
+                final Location to = core.getLocation(place);
 
                 core.changePlayerLocation(player, to);
                 final long enemyToFightOnEntry = to.selectEnemyToFightOnEntry();
                 if (enemyToFightOnEntry != -1) {
                     core.notifyPlayerEventHappened(player, new Event("Ambush!"));
-                    core.changePlayerActivity(player, new FightingActivity(core.findEnemy(enemyToFightOnEntry), player));
+                    core.changePlayerActivity(player, new FightingActivity(core.getEnemy(enemyToFightOnEntry), player));
                 } else {
                     core.changePlayerActivityToDefault(player);
                 }
@@ -84,7 +84,7 @@ public final class LocationActivity extends ActivityBase {
             action("location-"+location.id+".fight.look-for-enemies",
                     "Fight", "Look for something to kill",
                     player -> {
-                        core().changePlayerActivity(player, new FightingActivity(core().findEnemy(location.selectEnemyToFight()), player));
+                        core().changePlayerActivity(player, new FightingActivity(core().getEnemy(location.selectEnemyToFight()), player));
                     });
         }
     }

@@ -112,7 +112,7 @@ public final class Player implements AttributeHolder {
         player.experience = value.getInt("experience");
         player.virtuePoints = value.getInt("virtuePoints");
         player.health = value.getInt("health");
-        player.location = core.findLocation(value.getLong("locationId"));
+        player.location = core.getLocation(value.getLong("locationId"));
 
         for (JsonValue equipment : value.get("equipment")) {
             final long itemId = equipment.asLong();

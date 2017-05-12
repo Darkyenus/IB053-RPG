@@ -52,7 +52,7 @@ public final class BeingDeadActivity extends ActivityBase implements ActivityBas
 
     private void resurrect(Player player) {
         player.health = Math.max(1, player.getMaxHealth() / 4);
-        core().changePlayerLocation(player, core().findLocation(player.getLocation().graveyardId));
+        core().changePlayerLocation(player, core().getLocation(player.getLocation().graveyardId));
         core().changePlayerActivityToDefault(player);
     }
 
