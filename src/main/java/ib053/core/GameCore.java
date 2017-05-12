@@ -1,9 +1,7 @@
 package ib053.core;
 
-import com.esotericsoftware.jsonbeans.Json;
 import com.esotericsoftware.jsonbeans.JsonReader;
 import com.esotericsoftware.jsonbeans.JsonValue;
-import com.esotericsoftware.jsonbeans.OutputType;
 import com.koloboke.collect.map.LongObjMap;
 import com.koloboke.collect.map.hash.HashLongObjMap;
 import com.koloboke.collect.map.hash.HashLongObjMaps;
@@ -14,7 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Future;
@@ -131,11 +128,6 @@ public final class GameCore {
             LOG.info("Loaded {} enemies from {}", worldEnemies.size(), enemyFile);
         }
 
-        { // Load activities
-            activityCache = new ActivityCache(activityFile, this);
-            activityCache.load();
-        }
-
         { // Load players
             if (playerFile.exists()) {
                 final JsonValue playerArray = new JsonReader().parse(playerFile);
@@ -156,6 +148,14 @@ public final class GameCore {
                 LOG.info("Loaded {} players from {}", players.size(), playerFile);
             } else {
                 LOG.info("Loaded no players, no player file at {}", playerFile);
+            }
+        }
+
+        { // Load activities
+            activityCache = new ActivityCache(activityFile, this);
+            if(!activityCache.load()) {
+                eventLoop.shutdown();
+                return;
             }
         }
 
@@ -246,14 +246,19 @@ public final class GameCore {
         assert player != null;
         assert newActivity != null;
 
-        if (player.currentActivity != null) {
-            player.currentActivity.endActivity(player);
-            player.currentActivity.engagedPlayers.remove(player);
+        ActivityBase oldActivity = player.currentActivity;
+        if (newActivity == oldActivity) return;
+
+        if (oldActivity != null) {
+            oldActivity.endActivity(player);
+            oldActivity.engagedPlayers.remove(player);
+            activityCache.refreshPossiblyCustomActivity(oldActivity);
         }
 
         player.currentActivity = newActivity;
         player.currentActivity.engagedPlayers.add(player);
         newActivity.beginActivity(player);
+        activityCache.refreshPossiblyCustomActivity(newActivity);
 
         notifyPlayerActivityChanged(player);
     }
@@ -327,16 +332,18 @@ public final class GameCore {
     }
 
     public void shutdown() {
+        LOG.info("Shutting down");
+
         eventLoop.shutdown();
         try {
             if(eventLoop.awaitTermination(10, TimeUnit.SECONDS)) {
-                System.out.println("Event loop terminated");
+                LOG.info("Event loop terminated");
             } else {
-                System.err.println("Event loop doesn't want to terminate, shutting down");
+                LOG.warn("Event loop doesn't want to terminate, shutting down");
                 eventLoop.shutdownNow();
             }
         } catch (InterruptedException e) {
-            System.err.println("Event loop awaitTermination has been interrupted, shutting down");
+            LOG.error("Event loop awaitTermination has been interrupted, shutting down");
             eventLoop.shutdownNow();
         }
 

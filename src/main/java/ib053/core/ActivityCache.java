@@ -6,6 +6,8 @@ import com.koloboke.collect.map.LongObjMap;
 import com.koloboke.collect.map.ObjObjMap;
 import com.koloboke.collect.map.hash.HashLongObjMaps;
 import com.koloboke.collect.map.hash.HashObjObjMaps;
+import com.koloboke.collect.set.ObjSet;
+import com.koloboke.collect.set.hash.HashObjSets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +32,8 @@ final class ActivityCache {
     private final ObjObjMap<Class<? extends ActivityBase>, ActivityBase> singletonActivities = HashObjObjMaps.newMutableMap();
     /** Cache of activities that are singletons per location */
     private final ObjObjMap<Class<? extends ActivityBase>, LongObjMap<ActivityBase>> locationActivities = HashObjObjMaps.newMutableMap();
+    /** Contains all custom activities in which players are */
+    private final ObjSet<ActivityBase> customActivities = HashObjSets.newMutableSet();
 
     ActivityCache(File activityFile, GameCore gameCore) {
         this.activityFile = activityFile;
@@ -119,87 +123,157 @@ final class ActivityCache {
         return instance;
     }
 
-    void load() {
+    void refreshPossiblyCustomActivity(ActivityBase activity) {
+        if (getActivityType(activity.getClass()) != ActivityType.CUSTOM_ACTIVITY) return;
+        int engagedPlayerCount = activity.engagedPlayers.size();
+        if (engagedPlayerCount == 0) {
+            // Everybody just left
+            customActivities.remove(activity);
+        } else if (engagedPlayerCount == 1) {
+            // Either somebody just entered, or second person just left
+            customActivities.add(activity);
+        }
+    }
+
+    private void loadEngagedPlayers(ActivityBase activity, JsonValue activityJson) {
+        JsonValue engagedPlayersJson = activityJson.get("_engagedPlayers");
+        if (engagedPlayersJson == null || engagedPlayersJson.size == 0) return;
+
+        for (JsonValue engagedPlayerIdJson : engagedPlayersJson) {
+            final Player engagedPlayer = gameCore.findPlayer(engagedPlayerIdJson.asLong());
+            if (engagedPlayer == null) {
+                LOG.warn("Not adding player {} to activity {}, because player does not exist", engagedPlayerIdJson, activity);
+                continue;
+            }
+            activity.engagedPlayers.add(engagedPlayer);
+            engagedPlayer.currentActivity = activity;
+        }
+    }
+
+    boolean load() {
         if (!activityFile.exists()) {
             LOG.info("Not loading activity file {}, because it doesn't exist", activityFile);
-            return;
+            return true;
         }
         int activitiesLoaded = 0;
+        boolean error = false;
         final JsonValue activityJson = new JsonReader().parse(activityFile);
 
+        // Singleton
         for (JsonValue singletonJson : activityJson.get("singleton")) {
             final Class<? extends ActivityBase> singletonClass;
             try {
                 //noinspection unchecked
                 singletonClass = (Class<? extends ActivityBase>) Class.forName(singletonJson.name());
             } catch (ClassNotFoundException e) {
-                LOG.warn("Not restoring state of singleton activity {}", singletonJson.name(), e);
+                LOG.error("Not restoring state of singleton activity {}", singletonJson.name(), e);
+                error = true;
                 continue;
             }
 
             final ActivityType activityType = getActivityType(singletonClass);
             if (activityType != ActivityType.SINGLETON_ACTIVITY) {
-                LOG.warn("Not restoring state of singleton activity {}, because its real type is {}", singletonJson.name(), activityType);
-                continue;
-            }
-
-            if (!ActivityBase.Serializable.class.isAssignableFrom(singletonClass)) {
-                LOG.warn("Not restoring state of singleton activity {}, it does not implement Serializable", singletonJson.name());
+                LOG.error("Not restoring state of singleton activity {}, because its real type is {}", singletonJson.name(), activityType);
+                error = true;
                 continue;
             }
 
             final ActivityBase singleton = instantiate(singletonClass);
-            assert singleton instanceof ActivityBase.Serializable;
 
-            ((ActivityBase.Serializable) singleton).read(gameCore, singletonJson);
+            if (singleton instanceof ActivityBase.Serializable) {
+                ((ActivityBase.Serializable) singleton).read(gameCore, singletonJson);
+            }
+
             ensureInitialized(singleton);
+            loadEngagedPlayers(singleton, singletonJson);
 
             singletonActivities.put(singletonClass, singleton);
             activitiesLoaded++;
         }
 
+        // Per-location
         for (JsonValue perLocationJson : activityJson.get("per-location")) {
             final Class<? extends ActivityBase> perLocationClass;
             try {
                 //noinspection unchecked
                 perLocationClass = (Class<? extends ActivityBase>) Class.forName(perLocationJson.name());
             } catch (ClassNotFoundException e) {
-                LOG.warn("Not restoring state of per-location activity {}", perLocationJson.name(), e);
+                LOG.error("Not restoring state of per-location activity {}", perLocationJson.name(), e);
+                error = true;
                 continue;
             }
 
             final ActivityType activityType = getActivityType(perLocationClass);
             if (activityType != ActivityType.PER_LOCATION_ACTIVITY) {
-                LOG.warn("Not restoring state of per-location activity {}, because its real type is {}", perLocationJson.name(), activityType);
-                continue;
-            }
-
-            if (!ActivityBase.Serializable.class.isAssignableFrom(perLocationClass)) {
-                LOG.warn("Not restoring state of per-location activity {}, it does not implement Serializable", perLocationJson.name());
+                LOG.error("Not restoring state of per-location activity {}, because its real type is {}", perLocationJson.name(), activityType);
+                error = true;
                 continue;
             }
 
             final LongObjMap<ActivityBase> locationMap = getPerLocationActivityMap(perLocationClass);
 
-            for (JsonValue locationInstance : perLocationJson) {
-                final long locationId = Long.parseLong(locationInstance.name());
+            for (JsonValue instanceJson : perLocationJson) {
+                final long locationId = Long.parseLong(instanceJson.name());
                 final Location location = gameCore.findLocation(locationId);
                 if (location == null) {
-                    LOG.warn("Not restoring state of per-location activity {} for location {}, because the location no longer exists", perLocationClass, locationId);
+                    LOG.error("Not restoring state of per-location activity {} for location {}, because the location no longer exists", perLocationClass, locationId);
+                    error = true;
                     continue;
                 }
 
                 final ActivityBase instance = instantiate(perLocationClass, location);
-                assert instance instanceof ActivityBase.Serializable;
 
-                ((ActivityBase.Serializable) instance).read(gameCore, locationInstance);
+                if (instance instanceof ActivityBase.Serializable) {
+                    ((ActivityBase.Serializable) instance).read(gameCore, instanceJson);
+                }
                 ensureInitialized(instance);
+                loadEngagedPlayers(instance, instanceJson);
 
                 locationMap.put(locationId, instance);
                 activitiesLoaded++;
             }
         }
-        LOG.info("Loaded {} stateful activities", activitiesLoaded);
+
+        // Custom
+        {
+            for (JsonValue customActivityJson : activityJson.get("custom")) {
+                final Class<? extends ActivityBase> customClass;
+                try {
+                    //noinspection unchecked
+                    customClass = (Class<? extends ActivityBase>) Class.forName(customActivityJson.getString("_class"));
+                } catch (ClassNotFoundException e) {
+                    LOG.error("Not restoring state of custom activity {}", customActivityJson, e);
+                    error = true;
+                    continue;
+                }
+
+                final ActivityType activityType = getActivityType(customClass);
+                if (activityType != ActivityType.CUSTOM_ACTIVITY) {
+                    LOG.error("Not restoring state of custom activity {}, because its real type is {}", customClass.getName(), activityType);
+                    error = true;
+                    continue;
+                }
+
+                final ActivityBase instance = instantiate(customClass);
+
+                if (instance instanceof ActivityBase.Serializable) {
+                    ((ActivityBase.Serializable) instance).read(gameCore, customActivityJson);
+                }
+                ensureInitialized(instance);
+                loadEngagedPlayers(instance, customActivityJson);
+
+                customActivities.add(instance);
+                activitiesLoaded++;
+            }
+        }
+
+        if (error) {
+            LOG.error("Loading of activities failed");
+            return false;
+        } else {
+            LOG.info("Loaded {} stateful activities", activitiesLoaded);
+            return true;
+        }
     }
 
     void save() {
@@ -209,10 +283,23 @@ final class ActivityCache {
                 {
                     json.writeObjectStart("singleton");
                     for (ActivityBase singleton : singletonActivities.values()) {
-                        if (singleton instanceof ActivityBase.Serializable) {
+
+                        boolean serializable = singleton instanceof ActivityBase.Serializable;
+                        boolean hasPlayers = !singleton.engagedPlayers.isEmpty();
+                        if (serializable || hasPlayers) {
                             json.writeObjectStart(singleton.getClass().getName());
 
-                            ((ActivityBase.Serializable) singleton).write(json);
+                            if (hasPlayers) {
+                                json.writeArrayStart("_engagedPlayers");
+                                for (Player engagedPlayer : singleton.engagedPlayers) {
+                                    json.writeValue(engagedPlayer.getId(), long.class);
+                                }
+                                json.writeArrayEnd();
+                            }
+
+                            if (serializable) {
+                                ((ActivityBase.Serializable) singleton).write(json);
+                            }
 
                             json.writeObjectEnd();
                         }
@@ -225,17 +312,27 @@ final class ActivityCache {
                     for (Map.Entry<Class<? extends ActivityBase>, LongObjMap<ActivityBase>> entry : locationActivities.entrySet()) {
                         final LongObjMap<ActivityBase> locations = entry.getValue();
                         final Class<? extends ActivityBase> activityType = entry.getKey();
-                        if (locations.isEmpty() || !ActivityBase.Serializable.class.isAssignableFrom(activityType)) continue;
+                        boolean serializable = ActivityBase.Serializable.class.isAssignableFrom(activityType);
+                        if (locations.isEmpty()) continue;
                         json.writeObjectStart(activityType.getName());
 
                         for (Map.Entry<Long, ActivityBase> locationEntry : locations.entrySet()) {
                             final Long locationId = locationEntry.getKey();
                             final ActivityBase activity = locationEntry.getValue();
-                            assert activity instanceof ActivityBase.Serializable;
 
                             json.writeObjectStart(locationId.toString());
 
-                            ((ActivityBase.Serializable) activity).write(json);
+                            if (!activity.engagedPlayers.isEmpty()) {
+                                json.writeArrayStart("_engagedPlayers");
+                                for (Player engagedPlayer : activity.engagedPlayers) {
+                                    json.writeValue(engagedPlayer.getId(), long.class);
+                                }
+                                json.writeArrayEnd();
+                            }
+
+                            if (serializable) {
+                                ((ActivityBase.Serializable) activity).write(json);
+                            }
 
                             json.writeObjectEnd();
                         }
@@ -243,6 +340,30 @@ final class ActivityCache {
                         json.writeObjectEnd();
                     }
                     json.writeObjectEnd();
+                }
+
+                {
+                    json.writeArrayStart("custom");
+
+                    for (ActivityBase customActivity : customActivities) {
+                        json.writeObjectStart();
+
+                        json.writeValue("_class", customActivity.getClass().getName(), String.class);
+
+                        json.writeArrayStart("_engagedPlayers");
+                        for (Player engagedPlayer : customActivity.engagedPlayers) {
+                            json.writeValue(engagedPlayer.getId(), long.class);
+                        }
+                        json.writeArrayEnd();
+
+                        if (customActivity instanceof ActivityBase.Serializable) {
+                            ((ActivityBase.Serializable) customActivity).write(json);
+                        }
+
+                        json.writeObjectEnd();
+                    }
+
+                    json.writeArrayEnd();
                 }
                 json.writeObjectEnd();
             });

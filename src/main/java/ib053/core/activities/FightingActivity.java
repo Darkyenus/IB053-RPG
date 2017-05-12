@@ -75,9 +75,12 @@ public final class FightingActivity extends ActivityBase implements ActivityBase
         enemyInitiative = json.getInt("enemyInitiative");
         player = core.findPlayer(json.getInt("playerId"));
         playerInitiative = json.getInt("playerInitiative");
+
+        tryEnemyTurn();//TODO Proper task serialization!!!
     }
 
     FightingActivity(Enemy enemy, Player player) {
+        this();
         this.enemy = enemy;
         this.player = player;
     }
@@ -166,7 +169,9 @@ public final class FightingActivity extends ActivityBase implements ActivityBase
     }
 
     @Override
-    public void initialize() {
+    public void beginActivity(Player player) {
+        if (player != this.player) throw new IllegalArgumentException("Only "+this.player+" can participate in this fight!");
+
         this.enemyHealth = enemy.getMaxHealth();
         enemyInitiative = getEnemyInitiative();
         playerInitiative = getPlayerInitiative();
@@ -176,17 +181,7 @@ public final class FightingActivity extends ActivityBase implements ActivityBase
     }
 
     @Override
-    public void beginActivity(Player player) {
-        if (player != this.player) throw new IllegalArgumentException("Only "+this.player+" can participate in this fight!");
-    }
-
-    @Override
     public String getDescription(Player player) {
         return "A fight against "+enemy.name+"!\nYou: "+player.health+"/"+player.getMaxHealth()+" HP\n"+enemy.name+" "+enemyHealth+"/"+enemy.getMaxHealth()+" HP";
-    }
-
-    @Override
-    public void endActivity(Player player) {
-        if (player != this.player) throw new IllegalArgumentException("Only "+this.player+" can participate in this fight!");
     }
 }

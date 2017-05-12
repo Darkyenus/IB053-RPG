@@ -70,6 +70,8 @@ public abstract class ActivityBase {
     /** Called when player ends this activity. */
     public void endActivity(Player player) {}
 
+    /** Implement this interface in Activity to add support for serialization.
+     * _underscore names are reserved. */
     public interface Serializable {
         void write(Json json);
         void read(GameCore core, JsonValue json);
@@ -160,7 +162,7 @@ public abstract class ActivityBase {
                 actions = new Action[size];
             }
             int actionsI = 0;
-            for (int i = 0; i < size; i++) {
+            for (int i = 0; i < collection.size() && actionsI < size; i++) {
                 final Action action = collection.get(i);
                 if (action.isEnabled()) {
                     actions[actionsI++] = action;

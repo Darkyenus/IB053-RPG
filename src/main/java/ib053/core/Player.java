@@ -32,9 +32,9 @@ public final class Player implements AttributeHolder {
     /** Inventory contents. Does not contain equipment, that is in {@link #equipment} */
     private final List<Item> inventory = new ArrayList<>();
 
-    /** Do not modify.
+    /** Do not modify. Serialized elsewhere.
      * @see GameCore#changePlayerActivity(Player, ActivityBase) */
-    ActivityBase currentActivity;
+    transient ActivityBase currentActivity;
 
     /** Do not modify.
      * @see GameCore#changePlayerLocation(Player, Location) */
@@ -114,35 +114,6 @@ public final class Player implements AttributeHolder {
         player.health = value.getInt("health");
         player.location = core.findLocation(value.getLong("locationId"));
 
-        @SuppressWarnings("unchecked")
-        final Class<? extends ActivityBase> activityClass = (Class<? extends ActivityBase>) Class.forName(value.getString("activityClass"));
-        final ActivityType activityType = core.activityCache.getActivityType(activityClass);
-        switch (activityType) {
-            case SINGLETON_ACTIVITY:
-                player.currentActivity = core.activityCache.getSingletonActivity(activityClass);
-                break;
-            case PER_LOCATION_ACTIVITY:
-                player.currentActivity = core.activityCache.getLocationActivity(activityClass, player.location);
-                break;
-            case CUSTOM_ACTIVITY:
-                ActivityBase activityBase = ActivityCache.instantiate(activityClass);
-                final JsonValue activityData = value.get("activityData");
-                if (activityBase instanceof ActivityBase.Serializable && activityData != null) {
-                    ((ActivityBase.Serializable) activityBase).read(core, activityData);
-                } else if (activityBase instanceof ActivityBase.Serializable) {
-                    throw new IllegalArgumentException("Activity "+activityClass+" is serializable, but player "+id+" lacks activityData");
-                } else if (activityData != null) {
-                    LOG.warn("Player has activityData for "+activityClass+" but that is not serializable");
-                }
-
-                core.activityCache.ensureInitialized(activityBase);
-                player.currentActivity = activityBase;
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid activity type "+activityType+" of "+activityClass);
-        }
-        player.currentActivity.engagedPlayers.add(player);
-
         for (JsonValue equipment : value.get("equipment")) {
             final long itemId = equipment.asLong();
             final Item item = core.findItem(itemId);
@@ -175,15 +146,6 @@ public final class Player implements AttributeHolder {
         json.writeValue("virtuePoints", player.virtuePoints, int.class);
         json.writeValue("health", player.health, int.class);
         json.writeValue("locationId", player.location.id, long.class);
-
-        json.writeValue("activityClass", player.currentActivity.getClass().getName());
-        final ActivityType activityType = player.core.activityCache.getActivityType(player.currentActivity.getClass());
-        if (activityType == ActivityType.CUSTOM_ACTIVITY && player.currentActivity instanceof ActivityBase.Serializable) {
-            json.writeObjectStart("activityData");
-            ((ActivityBase.Serializable) player.currentActivity).write(json);
-            json.writeObjectEnd();
-        }
-
 
         json.writeArrayStart("equipment");
         for (Item equipped : player.equipment.values()) {
