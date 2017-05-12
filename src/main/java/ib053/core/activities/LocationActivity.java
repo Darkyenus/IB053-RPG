@@ -7,11 +7,12 @@ import java.util.function.ObjLongConsumer;
 /**
  * Default activity for a location.
  */
-public final class LocationActivity extends Activity {
+@Activity(ActivityType.PER_LOCATION_ACTIVITY)
+public final class LocationActivity extends ActivityBase {
 
     private final Location location;
 
-    public LocationActivity(Location location) {
+    private LocationActivity(Location location) {
         this.location = location;
     }
 
@@ -69,13 +70,13 @@ public final class LocationActivity extends Activity {
             }
         });
         location.directions.forEach((ObjLongConsumer<? super String>) (message, place) -> {
-            core.addActivityAction(this, new TravelAction(message, core.worldLocations.get(place)));
+            core.addActivityAction(this, new TravelAction(message, core.findLocation(place)));
         });
         if (location.hasEnemies()) {
             core.addActivityAction(this, new Action(this, "Fight", "Look for something to kill") {
                 @Override
                 protected void performAction(Player player) {
-                    getCore().changePlayerActivity(player, new FightingActivity(getCore().worldEnemies.get(location.selectEnemyToFight()), player));
+                    getCore().changePlayerActivity(player, new FightingActivity(getCore().findEnemy(location.selectEnemyToFight()), player));
                 }
             });
         }
@@ -114,9 +115,9 @@ public final class LocationActivity extends Activity {
             final long enemyToFightOnEntry = to.selectEnemyToFightOnEntry();
             if (enemyToFightOnEntry != -1) {
                 core.notifyPlayerEventHappened(player, new Event("Ambush!"));
-                core.changePlayerActivity(player, new FightingActivity(core.worldEnemies.get(enemyToFightOnEntry), player));
+                core.changePlayerActivity(player, new FightingActivity(core.findEnemy(enemyToFightOnEntry), player));
             } else {
-                core.changePlayerActivity(player, new LocationActivity(to));
+                core.changePlayerActivityToDefault(player);
             }
         }
     }

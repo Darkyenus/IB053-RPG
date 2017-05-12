@@ -2,4 +2,8 @@
 RPG Implemented for IB053
 
 ## How to run
-TBD
+
+Use SBT:
+```bash
+sbt "run resources:src/main/resources state:state/"
+```

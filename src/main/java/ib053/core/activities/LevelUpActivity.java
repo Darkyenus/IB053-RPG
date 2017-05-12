@@ -5,7 +5,8 @@ import ib053.core.*;
 /**
  * Manages level up
  */
-public class LevelUpActivity extends Activity {
+@Activity(ActivityType.SINGLETON_ACTIVITY)
+public class LevelUpActivity extends ActivityBase {
 
     public static final LevelUpActivity INSTANCE = new LevelUpActivity();
 

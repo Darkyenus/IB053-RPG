@@ -2,21 +2,20 @@ package ib053.core.activities;
 
 import com.koloboke.collect.map.LongLongMap;
 import com.koloboke.collect.map.hash.HashLongLongMaps;
-import ib053.core.Action;
-import ib053.core.Activity;
-import ib053.core.Event;
-import ib053.core.Player;
+import ib053.core.*;
 
 /**
  * Activity for people that are dead.
  */
-public class BeingDeadActivity extends Activity {
-
-    public static final BeingDeadActivity INSTANCE = new BeingDeadActivity();
+@Activity(ActivityType.SINGLETON_ACTIVITY)
+public class BeingDeadActivity extends ActivityBase {
 
     private final LongLongMap playerEnterTime = HashLongLongMaps.newMutableMap();
     // Eternity time in MS (1 minute for now, but make bigger)
     private static final long ETERNITY_MS = 1000L * 60L;
+
+    private BeingDeadActivity() {
+    }
 
     @Override
     public void initialize() {
@@ -55,7 +54,7 @@ public class BeingDeadActivity extends Activity {
 
     private void resurrect(Player player) {
         player.health = Math.max(1, player.getMaxHealth() / 4);
-        getCore().changePlayerLocation(player, getCore().worldLocations.get(player.getLocation().graveyardId));
+        getCore().changePlayerLocation(player, getCore().findLocation(player.getLocation().graveyardId));
         getCore().changePlayerActivityToDefault(player);
     }
 

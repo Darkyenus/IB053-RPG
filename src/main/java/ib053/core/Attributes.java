@@ -1,5 +1,6 @@
 package ib053.core;
 
+import com.esotericsoftware.jsonbeans.Json;
 import com.esotericsoftware.jsonbeans.JsonValue;
 
 /**
@@ -80,5 +81,19 @@ public final class Attributes implements AttributeHolder {
             attributes.modifiers[attribute.ordinal()] = jsonValue.getInt(attribute.shortName, 0);
         }
         return attributes;
+    }
+
+    public static void write(Json json, String jsonObjectName, Attributes attributes) {
+        if (jsonObjectName == null) json.writeObjectStart();
+        else json.writeObjectStart(jsonObjectName);
+
+        for (Attribute attribute : Attribute.VALUES) {
+            final int value = attributes.modifiers[attribute.ordinal()];
+            if (value != 0) {
+                json.writeValue(attribute.shortName, value, int.class);
+            }
+        }
+
+        json.writeObjectEnd();
     }
 }

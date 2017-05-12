@@ -6,7 +6,7 @@ package ib053.core;
 public abstract class Action {
 
     /** Activity to which this action belongs. */
-    public final Activity activity;
+    public final ActivityBase activity;
 
     /** Display name of the action group. Actions of the same group should be displayed together.
      * May be null for general group. */
@@ -15,7 +15,7 @@ public abstract class Action {
     /** Display name of the action. */
     public final String name;
 
-    protected Action(Activity activity, String group, String name) {
+    protected Action(ActivityBase activity, String group, String name) {
         assert activity != null;
         assert name != null;
 

@@ -10,6 +10,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static ib053.frontend.cli.Ansi.*;
 import static ib053.frontend.cli.Ansi.TextAttribute.*;
@@ -44,9 +45,14 @@ public class CliFrontend implements Frontend {
 
     @Override
     public void begin() {
-        player = core.createNewPlayer("Conan the Librarian");
-        assert player != null;
-        core.initNewPlayer(player);
+        player = core.findPlayer(1);
+        if (player == null) {
+            player = core.createNewPlayer("Conan the Librarian");
+            assert player != null;
+            core.initNewPlayer(player);
+        } else {
+            redraw();
+        }
 
         new Thread(() -> {
             while (true) {
@@ -60,13 +66,13 @@ public class CliFrontend implements Frontend {
                     break;
                 } else {
                     final int action = parseInt(line, -1);
-                    core.eventLoop.execute(() -> {
+                    core.schedule(() -> {
                         if (action < 1 || action > availableActions.size()) {
                             System.out.println("Invalid action");
                         } else {
                             availableActions.get(action-1).perform(player);
                         }
-                    });
+                    }, 0, TimeUnit.SECONDS);
                 }
             }
 

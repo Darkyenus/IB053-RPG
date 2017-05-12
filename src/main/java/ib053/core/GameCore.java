@@ -1,19 +1,24 @@
 package ib053.core;
 
+import com.esotericsoftware.jsonbeans.Json;
 import com.esotericsoftware.jsonbeans.JsonReader;
 import com.esotericsoftware.jsonbeans.JsonValue;
+import com.esotericsoftware.jsonbeans.OutputType;
 import com.koloboke.collect.map.LongObjMap;
 import com.koloboke.collect.map.hash.HashLongObjMap;
 import com.koloboke.collect.map.hash.HashLongObjMaps;
-import com.koloboke.function.LongObjConsumer;
 import ib053.core.activities.LevelUpActivity;
 import ib053.core.activities.LocationActivity;
 import ib053.frontend.Frontend;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -24,34 +29,55 @@ import java.util.function.LongConsumer;
  */
 public final class GameCore {
 
+    private static final Logger LOG = LoggerFactory.getLogger(GameCore.class);
+
     private final Frontend[] frontends;
-    public final ScheduledExecutorService eventLoop = new ScheduledThreadPoolExecutor(1) {
+    private final ScheduledExecutorService eventLoop = new ScheduledThreadPoolExecutor(1) {
         @Override
         protected void afterExecute(Runnable r, Throwable t) {
             super.afterExecute(r, t);
 
+            if (t == null && r instanceof Future) {
+                try {
+                    ((Future) r).get();
+                } catch (Throwable e) {
+                    t = e;
+                }
+            }
+
             if (t != null) {
-                System.err.println("EventLoop item crashed");
-                t.printStackTrace(System.err);
+                LOG.error("EventLoop item crashed", t);
             }
         }
     };
 
     private static final long STARTING_LOCATION_ID = 0;
 
-    public final LongObjMap<Location> worldLocations;
-    public final LongObjMap<Item> worldItems;
-    public final LongObjMap<Enemy> worldEnemies;
+    private static final String LOCATION_FILE_NAME = "locations.json";
+    private final LongObjMap<Location> worldLocations;
+    private static final String ITEM_FILE_NAME = "items.json";
+    private final LongObjMap<Item> worldItems;
+    private static final String ENEMY_FILE_NAME = "enemies.json";
+    private final LongObjMap<Enemy> worldEnemies;
 
+    private final File stateFolder;
+    private static final String PLAYER_FILE_NAME = "players.json";
+    private final LongObjMap<Player> players = HashLongObjMaps.newMutableMap();
     private final LongObjMap<List<Player>> playersInLocation;
-    private final LongObjMap<LocationActivity> locationActivities;
 
-    private final List<Player> players = new ArrayList<>();
+    private static final String ACTIVITY_FILE_NAME = "activities.json";
+    final ActivityCache activityCache;
 
     /** Creates the game core and starts the event loop, starting the game.
      * Handles the initialization of front-ends. */
-    public GameCore(File locationFile, File itemFile, File enemyFile, Frontend...frontends) {
+    public GameCore(File resourceFolder, File stateFolder, Frontend...frontends) {
         this.frontends = frontends;
+        this.stateFolder = stateFolder;
+        final File locationFile = new File(resourceFolder, LOCATION_FILE_NAME);
+        final File itemFile = new File(resourceFolder, ITEM_FILE_NAME);
+        final File enemyFile = new File(resourceFolder, ENEMY_FILE_NAME);
+        final File playerFile = new File(stateFolder, PLAYER_FILE_NAME);
+        final File activityFile = new File(stateFolder, ACTIVITY_FILE_NAME);
 
         final JsonReader jsonReader = new JsonReader();
 
@@ -73,10 +99,7 @@ public final class GameCore {
                 worldLocations.keySet().forEach((LongConsumer) id -> map.accept(id, new ArrayList<>()));
             });
 
-            // Pre-create Location activities
-            locationActivities = HashLongObjMaps.newImmutableMap((map) -> {
-                worldLocations.forEach((LongObjConsumer<? super Location>) (id, location) -> map.accept(id, new LocationActivity(location)));
-            });
+            LOG.info("Loaded {} locations from {}", worldLocations.size(), locationFile);
         }
 
         { // Load items
@@ -91,6 +114,7 @@ public final class GameCore {
                 }
             }
             worldItems = HashLongObjMaps.newImmutableMap(items);
+            LOG.info("Loaded {} items from {}", worldItems.size(), itemFile);
         }
 
         { // Load enemies
@@ -105,18 +129,57 @@ public final class GameCore {
                 }
             }
             worldEnemies = HashLongObjMaps.newImmutableMap(enemies);
+            LOG.info("Loaded {} enemies from {}", worldEnemies.size(), enemyFile);
         }
+
+        { // Load activities
+            activityCache = new ActivityCache(activityFile);
+            activityCache.load();
+        }
+
+        { // Load players
+            if (playerFile.exists()) {
+                final JsonValue playerArray = new JsonReader().parse(playerFile);
+                assert playerArray.isArray();
+
+                for (JsonValue playerJson : playerArray) {
+                    final Player player;
+                    try {
+                        player = Player.read(playerJson, this);
+                    } catch (Exception e) {
+                        throw new IllegalArgumentException("Invalid save file", e);
+                    }
+                    final Player oldPlayer = players.put(player.getId(), player);
+                    if (oldPlayer != null) {
+                        throw new IllegalArgumentException("Invalid save file, two players ("+player.getName()+" and "+oldPlayer.getName()+") share the same ID "+ player.getId()+"!");
+                    }
+                }
+                LOG.info("Loaded {} players from {}", players.size(), playerFile);
+            } else {
+                LOG.info("Loaded no players, no player file at {}", playerFile);
+            }
+        }
+
+        LOG.info("Starting with {} frontend(s)", frontends.length);
 
         // Initialize this in the event loop, so that nothing may disrupt the initialization
         eventLoop.execute(() -> {
             for (Frontend frontend : frontends) {
+                LOG.info("Initializing frontend: {}", frontend.getClass().getSimpleName());
                 frontend.initialize(this);
             }
 
             for (Frontend frontend : frontends) {
                 frontend.begin();
             }
+
+            LOG.info("Initialization done");
         });
+    }
+
+    /** Posts given runnable into event loop to be run in given amount of time */
+    public void schedule(Runnable runnable, long delay, TimeUnit unit) {
+        eventLoop.schedule(runnable, delay, unit);
     }
 
     /** Creates a whole new Player, with given name.
@@ -126,7 +189,7 @@ public final class GameCore {
         assert name != null;
         long id = 1; // Sequential player IDs for now
         //Check if name is not taken
-        for (Player player : players) {
+        for (Player player : players.values()) {
             if (player.getId() >= id) {
                 id = player.getId() + 1;
             }
@@ -144,8 +207,9 @@ public final class GameCore {
         attributes.set(Attribute.LUCK, 5);
         attributes.set(Attribute.STAMINA, 5);
 
+        LOG.info("Created new player named {} with id {}", name, id);
         final Player player = new Player(this, id, name, attributes);
-        players.add(player);
+        players.put(id, player);
         return player;
     }
 
@@ -155,7 +219,7 @@ public final class GameCore {
 
         player.setEquipment(worldItems.get(1));//Give player dull knife
         changePlayerLocation(player, worldLocations.get(STARTING_LOCATION_ID));
-        changePlayerActivity(player, locationActivities.get(STARTING_LOCATION_ID));
+        changePlayerActivityToDefault(player);
     }
 
     public void changePlayerLocation(Player player, Location toPlace) {
@@ -179,7 +243,7 @@ public final class GameCore {
      *
      * Calls respective Activity.begin/endActivity() and {@link #notifyPlayerActivityChanged(Player)}.
      */
-    public void changePlayerActivity(Player player, Activity newActivity) {
+    private void changePlayerActivityNoCheck(Player player, ActivityBase newActivity) {
         assert player != null;
         assert newActivity != null;
 
@@ -202,11 +266,26 @@ public final class GameCore {
         notifyPlayerActivityChanged(player);
     }
 
+    public void changePlayerActivity(Player player, ActivityBase customActivity) {
+        assert customActivity != null;
+        assert activityCache.getActivityType(customActivity.getClass()) == ActivityType.CUSTOM_ACTIVITY;
+
+        changePlayerActivityNoCheck(player, customActivity);
+    }
+
+    /** Change player's activity into singleton activity */
+    public void changePlayerActivity(Player player, Class<? extends ActivityBase> singletonActivityType) {
+        changePlayerActivityNoCheck(player, activityCache.getSingletonActivity(singletonActivityType));
+    }
+
+    /** Change player's activity into per-location activity */
+    public void changePlayerActivity(Player player, Class<? extends ActivityBase> locationActivityType, Location location) {
+        changePlayerActivityNoCheck(player, activityCache.getLocationActivity(locationActivityType, location));
+    }
+
     /** Changes the player's activity to default activity (LocationActivity, usually) */
     public void changePlayerActivityToDefault(Player player) {
-        final LocationActivity locationActivity = locationActivities.get(player.getLocation().id);
-        assert locationActivity != null;
-        changePlayerActivity(player, locationActivity);
+        changePlayerActivity(player, LocationActivity.class, player.getLocation());
     }
 
     /** Called when player has new actions to choose from.
@@ -218,7 +297,7 @@ public final class GameCore {
         }
     }
 
-    /** Called by {@link Activity} when player has witnessed an Event.
+    /** Called by {@link ActivityBase} when player has witnessed an Event.
      * Delegates this notification to frontends. */
     public void notifyPlayerEventHappened(Player player, Event event) {
         for (Frontend frontend : frontends) {
@@ -237,7 +316,7 @@ public final class GameCore {
         }
     }
 
-    public void setActivityActions(Activity activity, List<Action> actions) {
+    public void setActivityActions(ActivityBase activity, List<Action> actions) {
         activity.actions.clear();
         activity.actions.addAll(actions);
         for (Player engagedPlayer : activity.engagedPlayers) {
@@ -245,7 +324,7 @@ public final class GameCore {
         }
     }
 
-    public void setActivityActions(Activity activity, Action...actions) {
+    public void setActivityActions(ActivityBase activity, Action...actions) {
         activity.actions.clear();
         Collections.addAll(activity.actions, actions);
         for (Player engagedPlayer : activity.engagedPlayers) {
@@ -253,14 +332,14 @@ public final class GameCore {
         }
     }
 
-    public void addActivityAction(Activity activity, Action action) {
+    public void addActivityAction(ActivityBase activity, Action action) {
         activity.actions.add(action);
         for (Player engagedPlayer : activity.engagedPlayers) {
             notifyPlayerActivityChanged(engagedPlayer);
         }
     }
 
-    public boolean removeActivityAction(Activity activity, Action action) {
+    public boolean removeActivityAction(ActivityBase activity, Action action) {
         if(activity.actions.remove(action)) {
             for (Player engagedPlayer : activity.engagedPlayers) {
                 notifyPlayerActivityChanged(engagedPlayer);
@@ -270,7 +349,7 @@ public final class GameCore {
         return false;
     }
 
-    public void clearActivityActions(Activity activity) {
+    public void clearActivityActions(ActivityBase activity) {
         if (!activity.actions.isEmpty()) {
             activity.actions.clear();
             for (Player engagedPlayer : activity.engagedPlayers) {
@@ -279,14 +358,21 @@ public final class GameCore {
         }
     }
 
-    /** @return Player prevously created with given ID, or null if no such player exists. */
-    public Player findPlayer(long id) {
-        for (Player player : players) {
-            if (player.getId() == id) {
-                return player;
-            }
-        }
-        return null;
+    /** @return Player previously created with given ID, or null if no such player exists. */
+    public Player findPlayer(long playerId) {
+        return players.get(playerId);
+    }
+
+    public Location findLocation(long locationId) {
+        return worldLocations.get(locationId);
+    }
+
+    public Item findItem(long itemId) {
+        return worldItems.get(itemId);
+    }
+
+    public Enemy findEnemy(long enemyId) {
+        return worldEnemies.get(enemyId);
     }
 
     public void shutdown() {
@@ -302,5 +388,30 @@ public final class GameCore {
             System.err.println("Event loop awaitTermination has been interrupted, shutting down");
             eventLoop.shutdownNow();
         }
+
+        { // Save players
+            final Json playersJson = new Json(OutputType.json);
+            final StringWriter writer = new StringWriter();
+            playersJson.setWriter(writer);
+
+            playersJson.writeArrayStart();
+            for (Player player : players.values()) {
+                Player.write(playersJson, player);
+            }
+            playersJson.writeArrayEnd();
+            final CharSequence playersJsonString = writer.getBuffer();
+
+            try {
+                final File playerFile = new File(stateFolder, PLAYER_FILE_NAME);
+                PersistenceUtil.saveSecurely(playersJsonString, playerFile);
+                LOG.info("{} players saved to {}", players.size(), playerFile);
+            } catch (PersistenceUtil.PersistenceException e) {
+                LOG.error("Failed to save players file", e);
+                LOG.error("Contents of players file: {}", playersJsonString.toString());
+            }
+        }
+
+        // Save activities
+        activityCache.save();
     }
 }

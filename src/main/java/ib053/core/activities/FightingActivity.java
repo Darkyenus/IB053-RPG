@@ -1,28 +1,110 @@
 package ib053.core.activities;
 
+import com.esotericsoftware.jsonbeans.Json;
+import com.esotericsoftware.jsonbeans.JsonValue;
 import ib053.core.*;
+import ib053.util.SerializationConstructor;
 
 import java.util.concurrent.TimeUnit;
 
 /**
- *
+ * Activity of someone that is fighting an enemy.
  */
-public final class FightingActivity extends Activity {
+@Activity(ActivityType.CUSTOM_ACTIVITY)
+public final class FightingActivity extends ActivityBase implements ActivityBase.Serializable {
 
-    private final Enemy enemy;
+    private Enemy enemy;
     private int enemyHealth;
     private int enemyInitiative;
 
-    private final Player player;
+    private Player player;
     private int playerInitiative;
 
-    private final Action attackAction, fleeAction;
-    private final Runnable tryEnemyTurn;
+    private transient Action attackAction, fleeAction;
+    private transient Runnable tryEnemyTurn;
+
+    @SerializationConstructor
+    private FightingActivity() {
+    }
+
+    @Override
+    public void write(Json json) {
+        json.writeValue("enemyId", enemy.id, long.class);
+        json.writeValue("enemyHealth", enemyHealth, int.class);
+        json.writeValue("enemyInitiative", enemyInitiative, int.class);
+        json.writeValue("playerId", player.getId(), long.class);
+        json.writeValue("playerInitiative", playerInitiative, int.class);
+    }
+
+    @Override
+    public void read(GameCore core, JsonValue json) {
+        enemy = core.findEnemy(json.getLong("enemyId"));
+        enemyHealth = json.getInt("enemyHealth");
+        enemyInitiative = json.getInt("enemyInitiative");
+        player = core.findPlayer(json.getInt("playerId"));
+        playerInitiative = json.getInt("playerInitiative");
+
+        init();
+    }
 
     FightingActivity(Enemy enemy, Player player) {
         this.enemy = enemy;
         this.player = player;
+    }
 
+    private void nextTurn() {
+        getCore().schedule(FightingActivity.this.tryEnemyTurn, 1, TimeUnit.SECONDS);
+    }
+
+    private int getEnemyInitiative() {
+        int initiative = enemy.get(Attribute.AGILITY);
+        if (enemy.luckCheck(player)) {
+            initiative += initiative / 4;
+        }
+        return initiative;
+    }
+
+    private int getPlayerInitiative() {
+        int initiative = player.get(Attribute.AGILITY);
+        if (player.luckCheck(enemy)) {
+            initiative += initiative / 4;
+        }
+        return initiative;
+    }
+
+    private int resolveAttack(AttributeHolder attacker, AttributeHolder defender) {
+        final int attackerDex = attacker.get(Attribute.DEXTERITY);
+        boolean hit = RandomUtil.chooseFirst(attackerDex + attackerDex / 3, defender.get(Attribute.DEXTERITY));
+        boolean critical = false;
+
+        if (attacker.luckCheck(defender)) {
+            if (hit) {
+                critical = true;
+            } else {
+                hit = true;
+            }
+        }
+
+        if (!hit) {
+            return 0;
+        }
+
+        final int baseWeaponDamage = attacker.get(Attribute.DAMAGE);
+        final int weaponDamageSpread = attacker.get(Attribute.DAMAGE_SPREAD);
+        final float weaponDamage = Math.max(
+                1f,
+                baseWeaponDamage + RandomUtil.clamp((float)RandomUtil.RANDOM.nextGaussian() / 1.5f, -1f, 1f) * weaponDamageSpread);
+        final float strengthModifier = (float) (Math.log10(attacker.get(Attribute.STRENGTH) + 1.0) + 1.0);
+        final float totalDamage = weaponDamage * strengthModifier;
+
+        if (critical) {
+            return Math.round(totalDamage * 2f);
+        } else {
+            return Math.round(totalDamage);
+        }
+    }
+
+    private void init() {
         attackAction = new Action(this, "Combat", "Attack!") {
             @Override
             protected void performAction(Player player) {
@@ -87,7 +169,7 @@ public final class FightingActivity extends Activity {
                 if (player.health <= 0) {
                     // Game over
                     getCore().notifyPlayerEventHappened(player, new Event("💀 You died"));
-                    getCore().changePlayerActivity(player, BeingDeadActivity.INSTANCE);
+                    getCore().changePlayerActivity(player, BeingDeadActivity.class);
                 }
 
                 nextTurn();
@@ -98,60 +180,10 @@ public final class FightingActivity extends Activity {
         };
     }
 
-    private void nextTurn() {
-        getCore().eventLoop.schedule(FightingActivity.this.tryEnemyTurn, 1, TimeUnit.SECONDS);
-    }
-
-    private int getEnemyInitiative() {
-        int initiative = enemy.get(Attribute.AGILITY);
-        if (enemy.luckCheck(player)) {
-            initiative += initiative / 4;
-        }
-        return initiative;
-    }
-
-    private int getPlayerInitiative() {
-        int initiative = player.get(Attribute.AGILITY);
-        if (player.luckCheck(enemy)) {
-            initiative += initiative / 4;
-        }
-        return initiative;
-    }
-
-    private int resolveAttack(AttributeHolder attacker, AttributeHolder defender) {
-        final int attackerDex = attacker.get(Attribute.DEXTERITY);
-        boolean hit = RandomUtil.chooseFirst(attackerDex + attackerDex / 3, defender.get(Attribute.DEXTERITY));
-        boolean critical = false;
-
-        if (attacker.luckCheck(defender)) {
-            if (hit) {
-                critical = true;
-            } else {
-                hit = true;
-            }
-        }
-
-        if (!hit) {
-            return 0;
-        }
-
-        final int baseWeaponDamage = attacker.get(Attribute.DAMAGE);
-        final int weaponDamageSpread = attacker.get(Attribute.DAMAGE_SPREAD);
-        final float weaponDamage = Math.max(
-                1f,
-                baseWeaponDamage + RandomUtil.clamp((float)RandomUtil.RANDOM.nextGaussian() / 1.5f, -1f, 1f) * weaponDamageSpread);
-        final float strengthModifier = (float) (Math.log10(attacker.get(Attribute.STRENGTH) + 1.0) + 1.0);
-        final float totalDamage = weaponDamage * strengthModifier;
-
-        if (critical) {
-            return Math.round(totalDamage * 2f);
-        } else {
-            return Math.round(totalDamage);
-        }
-    }
-
     @Override
     public void initialize() {
+        init();
+
         this.enemyHealth = enemy.getMaxHealth();
         enemyInitiative = getEnemyInitiative();
         playerInitiative = getPlayerInitiative();
